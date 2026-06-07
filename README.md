@@ -73,7 +73,7 @@ Post-processing (stages 6–31)
   ├── Policy layer                — OWASP/PCI-DSS/SOC2 compliance packs
   └── Benchmark harness           — precision/recall on every scan
 ```
-** Edge-Optimized Execution:** Thanks to the deterministic Smart Context engine, the AI only analyzes security-dense code. This allows the tool to process massive, 2,000+ line files directly on Vercel's free tier edge network without hitting serverless timeout limits.
+- **Highly Optimized Edge Execution** — Thanks to the deterministic Smart Context engine, the AI only analyzes security-dense code. This allows the tool to process massive, 2,000+ line files directly on Vercel's free tier without hitting serverless timeout limits.
 ---
 
 ## Quick start
