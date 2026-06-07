@@ -252,7 +252,8 @@ Fixes applied on top of v1.4:
 ---
 
 ## Known limitations
-
+  
+- **Analysis Time & Vercel Timeouts** — The 31-stage pipeline is thorough and can take up to a minute to process large files. If you are using the live Vercel demo on the free Hobby tier, serverless functions will time out after 10 seconds. To analyze massive files without hitting timeout errors, please clone the repo and run it locally (`npm run dev`).
 - **Single-file analysis only** — cross-file taint (e.g. a sink in `utils.js` called from `routes.js`) requires uploading both files concatenated. Multi-file support is planned for v1.5.
 - **No real sandboxed execution** — exploit replay simulates payloads with pattern matching, not actual execution. Firecracker/gVisor sandbox is a v1.5 target.
 - **Rate limited** — 60 requests/minute per IP by default. Configurable in `middleware.ts`.
