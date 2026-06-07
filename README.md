@@ -217,4 +217,3 @@ MIT — see [LICENSE](LICENSE) for details.
 ---
 
 *Built by [@AlpraxIsHim](https://t.me/AlpraxIsHim)*
-```
