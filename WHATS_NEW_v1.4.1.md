@@ -1,4 +1,4 @@
-# What's New in v1.5
+# What's New in v1.4.1
 
 Three architectural improvements that materially raise analysis quality on
 non-JavaScript code and cut wall-clock latency on large files.
@@ -46,7 +46,7 @@ files where the v1.4 router would have routed to `single-reviewer`.
 
 **Concrete impact.**
 
-| Code sample                                  | v1.4 route            | v1.5 route            |
+| Code sample                                  | v1.4 route            | v1.4.1 route            |
 |----------------------------------------------|-----------------------|------------------------|
 | 10-line Python with `pickle.loads(req.form)` | `single-reviewer`     | `adversarial-full`     |
 | PHP page with `unserialize($_GET['x'])`      | `single-reviewer`     | `adversarial-full`     |
@@ -91,14 +91,14 @@ content-aware extraction:
 
 **Reasoning behind the budget.** The 6,000-character budget is unchanged
 from v1.4 to keep token usage stable. The win is *what fills* the
-budget: in v1.4 ~85% was boilerplate; in v1.5 ~85% is security-relevant
+budget: in v1.4 ~85% was boilerplate; in v1.4.1 ~85% is security-relevant
 code or its immediate context.
 
 **Concrete impact.** Tested on a 185-line file with mixed boilerplate
 and three vulnerable functions:
 - v1.4: kept first ~95 lines, missed the `eval(req.query.code)` at
   line 165 entirely.
-- v1.5: kept 24 lines including all three vulnerable functions, the
+- v1.4.1: kept 24 lines including all three vulnerable functions, the
   imports, and ±5 lines of context around each.
 
 **Metadata.** New `pipelineMetadata.smartContext` field reports
@@ -142,7 +142,7 @@ Key design choices:
 - Stage 20 alone: ~600ms
 - Stage 21 alone: ~800ms
 - v1.4 serial:   ~1,400ms
-- v1.5 parallel: ~800ms (≈43% faster on this segment)
+- v1.4.1 parallel: ~800ms (≈43% faster on this segment)
 
 The whole-pipeline impact is smaller (≈10–15% wall-clock reduction
 end-to-end) but every saved second reduces SSE keepalive load and
@@ -168,7 +168,7 @@ lowers session-timeout risk on free-tier hosting.
   `ReviewResult` and `pipelineMetadata` is preserved.
 - Two new metadata fields are added: `languageProfile` and `smartContext`.
   Clients that don't read them are unaffected.
-- `engineVersion` is bumped from `'v1.4'` to `'v1.5'`.
+- `engineVersion` is bumped from `'v1.4'` to `'v1.4.1'`.
 - The original `minimizeCode()` is still exported from
   `code-context-manager.ts` as a back-compat alias (delegates to
   `buildCodeContext`).
@@ -180,7 +180,7 @@ lowers session-timeout risk on free-tier hosting.
 ## Files at a glance
 
 ```
-v1.5/
+v1.4.1/
 ├── lib/
 │   ├── language-profiles.ts        ← NEW (640 lines)
 │   ├── code-context-manager.ts     ← NEW (315 lines)
