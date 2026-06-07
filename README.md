@@ -81,7 +81,7 @@ Post-processing (stages 6–31)
 ### Prerequisites
 
 - Node.js 18+
-- An [OpenRouter](https://openrouter.ai) API key (free tier works any available AI agent by default)
+- An [OpenRouter](https://openrouter.ai) API key (free tier works, uses any available AI agent by default)
 
 ### 1. Clone
 
