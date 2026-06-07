@@ -198,6 +198,24 @@ Scores below 95 on a clean file mean the analysis tier was `single-reviewer` or 
 
 ---
 
+---
+
+### 🔍 Deep Dive: The "100/100" Paradox
+If your code scores **100/100** and shows **0 Bugs / 0 Risks** at the top, the analysis isn't over. Scroll down to the bottom of the **Overview** tab to see the hidden depths of the 31-stage pipeline. 
+
+A perfect score often means the engine successfully neutralized complex threats, rewarded secure patterns, or safely escalated ambiguous code. Here is how to read the advanced telemetry:
+
+- **Engine Stats:** See exactly how many **Taint sources** and **Call graph nodes** were mapped across your codebase.
+- **Confidence Decay Engine:** Check how many findings were actively suppressed to prevent False Positives (e.g., `⊘ 9 suppressed | 📉 24% FP reduction`).
+- **Vuln Family Clustering:** See if the engine grouped raw findings into unique families (e.g., `Cross-Site Scripting (XSS) ×19`) to identify systemic architectural patterns.
+- **Root-Cause Graph:** Discover how many unique exploit surfaces were analyzed before being marked as safe or earning **Security Rewards** (e.g., `✓ safe-dom`).
+- **Multi-role Consensus:** Understand the AI's confidence. If you see `⚠ escalated`, it means the AI agents flagged suspicious patterns (like obfuscated code or complex logic) but deferred to human review rather than hallucinating a bug.
+- **Constraint-Valid Attack Chains:** The most critical metric. The engine maps theoretical multi-step exploits (e.g., `🔗 1 fully proven | CVSS 8.2`) to show you what *could* happen if a single guardrail failed, even if the current code is technically safe.
+
+---
+
+---
+
 ## Project structure
 
 ```
