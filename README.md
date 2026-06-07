@@ -81,13 +81,13 @@ Post-processing (stages 6–31)
 ### Prerequisites
 
 - Node.js 18+
-- An [OpenRouter](https://openrouter.ai) API key (free tier works — uses `claude-sonnet-4` by default)
+- An [OpenRouter](https://openrouter.ai) API key (free tier works — uses `claude-sonnet-4` or any available AI agent by default)
 
 ### 1. Clone
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-code-review.git
-cd ai-code-review
+git clone https://github.com/shreyashhu/ai-code-reviewer
+cd ai-code-reviewer
 ```
 
 ### 2. Install dependencies
