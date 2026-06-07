@@ -2,7 +2,7 @@
 
 A production-grade security code analyzer built on Next.js. Paste or upload code and get a scored, multi-stage security audit powered by a 31-stage deterministic + AI pipeline.
 
-**Live demo:** run locally in under 2 minutes (see [Quick Start](#quick-start)).
+**Live demo:** [🚀 Try it live on Vercel](https://ai-code-reviewer-kappa-navy.vercel.app/) or run locally in under 2 minutes (see [Quick Start](#quick-start)).
 
 ---
 
