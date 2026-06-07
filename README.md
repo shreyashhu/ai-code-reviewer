@@ -4,6 +4,8 @@ A production-grade security code analyzer built on Next.js. Paste or upload code
 
 **Live demo:** [🚀 Try it live on Vercel](https://ai-code-reviewer-kappa-navy.vercel.app/) or run locally in under 2 minutes (see [Quick Start](#quick-start)).
 
+**Desktop App:** [⬇️ Download for Windows (.exe)](../../releases/latest) — Native desktop experience, no browser or Node.js required.
+
 ---
 
 ## What it does
@@ -33,7 +35,7 @@ The pipeline runs in four tiers based on code complexity, always choosing the mi
 
 ### The 31 stages
 
-```
+```text
 Deterministic pass (stages 1–3)
   ├── Security rules engine       — 60+ regex+context rules
   ├── Taint analysis              — source→sink tracking with guard suppression
@@ -73,33 +75,37 @@ Post-processing (stages 6–31)
   ├── Policy layer                — OWASP/PCI-DSS/SOC2 compliance packs
   └── Benchmark harness           — precision/recall on every scan
 ```
+
 - **Highly Optimized Edge Execution** — Thanks to the deterministic Smart Context engine, the AI only analyzes security-dense code. This allows the tool to process massive, 2,000+ line files directly on Vercel's free tier without hitting serverless timeout limits.
+
 ---
 
 ## Quick start
 
-### Prerequisites
+### Option 1: Windows Desktop App (Easiest) 🖥️
+1. Go to the [Releases Page](../../releases/latest).
+2. Download the **`AI-Code-Reviewer-Setup-1.4.1.exe`** file.
+3. Run the installer and launch the app from your desktop or start menu!
 
+### Option 2: Run Locally (For Developers) 💻
+
+#### Prerequisites
 - Node.js 18+
-- An [OpenRouter](https://openrouter.ai) API key (free tier works, uses any available AI agent by default)
+- An [OpenRouter](https://openrouter.ai) API key (free tier works — uses any available AI agent by default)
 
-### 1. Clone
-
+#### 1. Clone
 ```bash
-git clone https://github.com/shreyashhu/ai-code-reviewer
+git clone https://github.com/shreyashhu/ai-code-reviewer.git
 cd ai-code-reviewer
 ```
 
-### 2. Install dependencies
-
+#### 2. Install dependencies
 ```bash
 npm install
 ```
 
-### 3. Set environment variables
-
+#### 3. Set environment variables
 Create a `.env.local` file in the project root:
-
 ```env
 # Required
 OPENROUTER_API_KEY=sk-or-v1-...
@@ -108,19 +114,15 @@ OPENROUTER_API_KEY=sk-or-v1-...
 POLICY_PACK=
 TRUST_PROXY=false
 ```
-
 Get your OpenRouter key at [openrouter.ai/keys](https://openrouter.ai/keys). No credit card required for the free tier.
 
-### 4. Run
-
+#### 4. Run
 ```bash
 npm run dev
 ```
-
 Open [http://localhost:3000](http://localhost:3000).
 
-### 5. Analyze code
-
+#### 5. Analyze code
 Paste any JavaScript, TypeScript, Python, Go, or other code into the editor and click **Analyze**, or press `Ctrl+Enter`.
 
 ---
@@ -130,20 +132,17 @@ Paste any JavaScript, TypeScript, Python, Go, or other code into the editor and 
 All configuration is via environment variables in `.env.local`.
 
 ### Required
-
 | Variable | Description |
 |----------|-------------|
 | `OPENROUTER_API_KEY` | Your OpenRouter API key. Get one at openrouter.ai/keys |
 
 ### Optional
-
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `POLICY_PACK` | *(none)* | Comma-separated compliance packs to activate. Options: `owasp-top10`, `pci-dss`, `soc2`, `strict`, `test-env` |
 | `TRUST_PROXY` | `false` | Set `true` if behind a trusted reverse proxy (Nginx, Caddy, etc.) for correct IP rate limiting |
 
 ### Policy packs
-
 Activate via `POLICY_PACK=owasp-top10,strict` in `.env.local`:
 
 | Pack | What it does |
@@ -159,23 +158,19 @@ Activate via `POLICY_PACK=owasp-top10,strict` in `.env.local`:
 ## Deploying
 
 ### Vercel (recommended)
-
 ```bash
 npm install -g vercel
 vercel
 ```
-
 Set `OPENROUTER_API_KEY` in the Vercel dashboard under Project → Settings → Environment Variables.
 
 ### Docker
-
 ```bash
 docker build -t ai-code-review .
 docker run -p 3000:3000 -e OPENROUTER_API_KEY=sk-or-v1-... ai-code-review
 ```
 
 ### Self-hosted (PM2)
-
 ```bash
 npm run build
 npm install -g pm2
@@ -196,10 +191,6 @@ pm2 start npm --name "ai-code-review" -- start
 
 Scores below 95 on a clean file mean the analysis tier was `single-reviewer` or `deterministic-only` — the pipeline is being honest that it didn't run a full adversarial review.
 
----
-
----
-
 ### 🔍 Deep Dive: The "100/100" Paradox
 If your code scores **100/100** and shows **0 Bugs / 0 Risks** at the top, the analysis isn't over. Scroll down to the bottom of the **Overview** tab to see the hidden depths of the 31-stage pipeline. 
 
@@ -214,16 +205,15 @@ A perfect score often means the engine successfully neutralized complex threats,
 
 ---
 
----
-
 ## Project structure
 
-```
+```text
 ai-code-review/
 ├── app/
 │   ├── api/review/route.ts     # Main 31-stage analysis pipeline
 │   ├── page.tsx                # Editor + UI
-│   └── layout.tsx
+│   ├── layout.tsx
+│   └── manifest.ts             # PWA manifest for mobile/desktop wrapping
 ├── components/
 │   └── analysis/
 │       └── AnalysisPanel.tsx   # Results panel (Overview/Bugs/Risks/Suggest/Diff/Visual)
@@ -240,7 +230,11 @@ ai-code-review/
 │   ├── policy-layer.ts         # Compliance packs + CI gate
 │   ├── benchmark-harness.ts    # Precision/recall test vectors
 │   └── ...28 more engines
+├── public/
+│   └── icon-512.png            # App icon for PWA and Desktop
+├── electron.js                 # Native Windows wrapper
 ├── main.js                     # Example code to analyze
+├── dist/                       # Compiled .exe installer (ignored by git)
 ├── .env.local                  # Your config (not committed)
 └── README.md
 ```
@@ -266,11 +260,13 @@ Fixes applied on top of v1.4:
 - **Old patch notes removed** — only `WHATS_NEW_v1.4.md` remains
 - **6 new security rules** — `Function()` eval, `Math.random()` for crypto, prototype pollution via `for..in`, `process.env` leak, loose equality in auth, missing `await` on async auth
 - **31 benchmark test vectors** (was 13) — added SSRF, open redirect, IDOR, `node-serialize`, `Function()` eval, missing-await auth, and 8 FP traps
+- **Desktop App Support** — Added Electron wrapper (`electron.js`) to build native Windows `.exe` installers.
+- **PWA Support** — Added `manifest.ts` and 512x512 icons for seamless mobile and desktop wrapping.
 
 ---
 
 ## Known limitations
-  
+
 - **Single-file analysis only** — cross-file taint (e.g. a sink in `utils.js` called from `routes.js`) requires uploading both files concatenated. Multi-file support is planned for v1.5.
 - **No real sandboxed execution** — exploit replay simulates payloads with pattern matching, not actual execution. Firecracker/gVisor sandbox is a v1.5 target.
 - **Rate limited** — 60 requests/minute per IP by default. Configurable in `middleware.ts`.
@@ -280,6 +276,9 @@ Fixes applied on top of v1.4:
 
 ## Contributing
 
+This started as a solo project, but I am completely open to contributions, ideas, and suggestions! If you spot a bug or have an idea for a new feature, please open an Issue. I read all of them.
+
+If you want to submit code:
 1. Fork the repo
 2. Create a feature branch: `git checkout -b feature/my-improvement`
 3. Make your changes
@@ -298,3 +297,16 @@ MIT — see [LICENSE](LICENSE) for details.
 ---
 
 *Built by [@AlpraxIsHim](https://t.me/AlpraxIsHim)*
+```
+
+### 🚀 Final Steps to make it live:
+
+1. **Save** the `README.md` file.
+2. **Make sure `dist/` is in your `.gitignore`** so you don't accidentally upload the heavy `.exe` to your source code!
+3. Run your 3 Magic Commands in the terminal:
+   ```bash
+   git add .
+   git commit -m "Finalize README with Desktop App, Deep Dive, and Edge Flex"
+   git push
+   ```
+4. **Go to GitHub Releases**, edit your `v1.4.1` release, and **drag and drop the `.exe` file** from your `dist/` folder into the "Attach binaries" box at the bottom, then click "Update Release".
