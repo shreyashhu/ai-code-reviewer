@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
   if (!rawCode || typeof rawCode !== 'string' || !rawCode.trim()) return NextResponse.json({ error: 'code is required.' }, { status: 400 });
   if (rawModel !== undefined && !VALID_MODELS.has(rawModel)) return NextResponse.json({ error: 'Invalid model.' }, { status: 400 });
   if (rawLanguage !== undefined && !VALID_LANGUAGES.has(rawLanguage)) return NextResponse.json({ error: 'Invalid language.' }, { status: 400 });
-  if (rawCode.length > 100_000) return NextResponse.json({ error: 'Code exceeds 100,000 character limit.' }, { status: 400 });
+// if (rawCode.length > 100_000) return NextResponse.json({ error: 'Code exceeds 100,000 character limit.' }, { status: 400 });
 
   const code = rawCode.trim(), langHint = rawLanguage && rawLanguage !== 'auto' ? rawLanguage : 'auto-detect';
   const preferred = rawModel && rawModel !== 'auto' ? rawModel : 'openai/gpt-4o-mini';
