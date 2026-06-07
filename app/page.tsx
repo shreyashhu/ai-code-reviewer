@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Sparkles, Code2, AlertCircle, X, CheckCircle2, Loader2,
@@ -110,10 +109,15 @@ export default function HomePage() {
   const [isLoading, setIsLoading]     = useState(false);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [error, setError]             = useState<string | null>(null);
-  const [splitPct, setSplitPct]       = useState(60);   // resizable panels
-  const [isDragging, setIsDragging]   = useState(false);
-  const [isDragOver, setIsDragOver]   = useState(false); // file drag-over on editor
+  
+  // ── BYOK State ──────────────────────────────────────────────────────────
+  const [userApiKey, setUserApiKey]   = useState('');
+  const [showApiSettings, setShowApiSettings] = useState(false);
 
+  const [splitPct, setSplitPct]       = useState(60);
+  const [isDragging, setIsDragging]   = useState(false);
+  const [isDragOver, setIsDragOver]   = useState(false);
+  
   const editorFocusRef = useRef<(() => void) | null>(null);
   const fileInputRef   = useRef<HTMLInputElement>(null);
   const abortRef       = useRef<AbortController | null>(null);
@@ -121,6 +125,12 @@ export default function HomePage() {
   const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dividerRef     = useRef<HTMLDivElement>(null);
   const containerRef   = useRef<HTMLDivElement>(null);
+
+  // ── Load API Key from LocalStorage ───────────────────────────────────────
+  useEffect(() => {
+    const savedKey = localStorage.getItem('openrouter_key');
+    if (savedKey) setUserApiKey(savedKey);
+  }, []);
 
   // ── Rotate loading messages ──────────────────────────────────────────────
   useEffect(() => {
@@ -179,14 +189,11 @@ export default function HomePage() {
     e.target.value = '';
   }, [handleFileContent]);
 
-  // ── Drag-and-drop code files onto editor ─────────────────────────────────
   const handleEditorDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
   }, []);
-
   const handleEditorDragLeave = useCallback(() => setIsDragOver(false), []);
-
   const handleEditorDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -198,14 +205,12 @@ export default function HomePage() {
     .filter((i): i is typeof i & { line: number } => i.line !== null)
     .map((i) => i.line) ?? [];
 
-
   // ── Analysis ─────────────────────────────────────────────────────────────
   const runAnalysis = useCallback(async () => {
     if (!code.trim() || isLoading) return;
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -213,7 +218,10 @@ export default function HomePage() {
     try {
       const response = await fetch('/api/review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-openrouter-key': userApiKey // Sends your UI key to the backend
+        },
         body: JSON.stringify({ code, model: modelId, language: langId }),
         signal: controller.signal,
       });
@@ -254,7 +262,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [code, modelId, langId, isLoading]);
+  }, [code, modelId, langId, isLoading, userApiKey]);
 
   const handleAnalyze = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -274,7 +282,6 @@ export default function HomePage() {
     setError(null);
   }, []);
 
-  // Apply optimized code from analysis panel back to the editor
   const handleApplyFix = useCallback((optimized: string) => {
     setCode(optimized);
     setResult(null);
@@ -282,7 +289,6 @@ export default function HomePage() {
     setTimeout(() => editorFocusRef.current?.(), 50);
   }, []);
 
-  // ── Global keyboard shortcuts ─────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
@@ -306,7 +312,6 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#09090b' }}>
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -314,17 +319,14 @@ export default function HomePage() {
         accept=".js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.cpp,.cc,.cs,.php,.rb,.swift,.kt,.sql,.sh,.bash,.txt"
         onChange={handleFileInputChange}
       />
-
-      {/* Ambient glow */}
+      
       <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 80% 40% at 50% -10%, rgba(124,58,237,0.10) 0%, transparent 70%)' }} />
       <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 40% 30% at 80% 80%, rgba(37,99,235,0.05) 0%, transparent 60%)' }} />
 
-      {/* Navbar */}
       <nav
         className="relative z-20 flex-shrink-0 flex items-center justify-between px-5 py-2.5"
         style={{ background: 'rgba(9,9,11,0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 1px 0 rgba(255,255,255,0.04)' }}
       >
-        {/* Logo */}
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center" style={{ boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
             <Code2 className="w-4 h-4 text-white" />
@@ -332,9 +334,7 @@ export default function HomePage() {
           <span className="text-sm font-semibold text-zinc-100 tracking-tight">AI Code Review <span className="text-[10px] text-violet-400 font-mono">v1.4.1</span></span>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-2">
-          {/* Language */}
           <div className="relative">
             <select
               value={langId}
@@ -348,7 +348,6 @@ export default function HomePage() {
             <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
 
-          {/* Model */}
           <div className="relative">
             <select
               value={modelId}
@@ -362,7 +361,6 @@ export default function HomePage() {
             <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
 
-          {/* Status chip */}
           <div
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all duration-300"
             style={{
@@ -383,7 +381,15 @@ export default function HomePage() {
             </span>
           </div>
 
-          {/* Analyze button */}
+          {/* API Settings Button */}
+          <button
+            onClick={() => setShowApiSettings(true)}
+            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+            title={userApiKey ? "API Key Saved (Click to edit)" : "Add OpenRouter API Key"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+
           <Button
             variant="accent" size="md" isLoading={isLoading}
             onClick={handleAnalyze} disabled={!code.trim()}
@@ -396,7 +402,6 @@ export default function HomePage() {
         </div>
       </nav>
 
-      {/* Error banner */}
       {error && (
         <div className="relative z-20 flex-shrink-0 flex items-center gap-3 px-5 py-2.5 bg-red-500/10 border-b border-red-500/20">
           <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -407,21 +412,17 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Pipeline status bar */}
       <PipelineStatus isLoading={isLoading} msgIdx={loadingMsgIdx} />
 
-      {/* Main layout */}
       <main
         ref={containerRef}
         className="relative z-10 flex flex-1 overflow-hidden"
         style={{ cursor: isDragging ? 'col-resize' : 'default' }}
       >
-        {/* Left: Editor */}
         <div
           className="flex flex-col overflow-hidden flex-shrink-0"
           style={{ width: `${splitPct}%`, borderRight: '1px solid rgba(255,255,255,0.06)', minHeight: 0 }}
         >
-          {/* Editor toolbar */}
           <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="flex items-center gap-2">
               <div className="flex gap-1.5">
@@ -445,7 +446,6 @@ export default function HomePage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Upload file button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 title="Upload code file"
@@ -469,7 +469,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Monaco wrapper: flex-1 + min-h-0 so the div has a real pixel height */}
           <div
             className="relative overflow-hidden"
             style={{ flex: 1, minHeight: 0 }}
@@ -484,7 +483,6 @@ export default function HomePage() {
               bugLines={bugLines}
               onFocusRef={editorFocusRef}
             />
-            {/* Drag-over overlay */}
             {isDragOver && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 fade-in-up pointer-events-none"
                 style={{ background: 'rgba(124,58,237,0.10)', border: '2px dashed rgba(124,58,237,0.5)' }}>
@@ -495,7 +493,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Draggable divider */}
         <div
           ref={dividerRef}
           onMouseDown={handleDividerMouseDown}
@@ -506,7 +503,6 @@ export default function HomePage() {
             className="absolute inset-y-0 w-px transition-all duration-150 group-hover:w-0.5"
             style={{ background: isDragging ? 'rgba(124,58,237,0.6)' : 'rgba(255,255,255,0.06)', left: '50%', transform: 'translateX(-50%)' }}
           />
-          {/* grip dots */}
           <div className="relative z-10 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             {[0,1,2].map(i => (
               <div key={i} className="w-0.5 h-0.5 rounded-full" style={{ background: isDragging ? 'rgba(124,58,237,0.8)' : 'rgba(255,255,255,0.3)' }} />
@@ -514,7 +510,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Right: Analysis */}
         <div className="flex flex-col overflow-hidden flex-1">
           <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Analysis</span>
@@ -561,6 +556,54 @@ export default function HomePage() {
           </div>
         </div>
       </main>
+
+      {/* API Settings Modal */}
+      {showApiSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h2 className="text-lg font-bold text-white mb-2">OpenRouter API Settings</h2>
+            <p className="text-sm text-zinc-400 mb-4">
+              Enter your OpenRouter API key. It is saved securely in your browser's local storage.
+              <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline ml-1">Get a free key here.</a>
+            </p>
+            <input
+              type="password"
+              placeholder="sk-or-v1-..."
+              value={userApiKey}
+              onChange={(e) => setUserApiKey(e.target.value)}
+              className="w-full p-3 bg-black/40 border border-white/10 rounded-lg text-white mb-4 focus:outline-none focus:ring-2 focus:ring-violet-500/50 font-mono text-sm"
+            />
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  localStorage.setItem('openrouter_key', userApiKey);
+                  setShowApiSettings(false);
+                }}
+                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Save Key
+              </button>
+              <button 
+                onClick={() => setShowApiSettings(false)}
+                className="flex-1 bg-white/5 hover:bg-white/10 text-white font-semibold py-2 px-4 rounded-lg transition-colors border border-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+            {userApiKey && (
+              <button
+                onClick={() => {
+                  setUserApiKey('');
+                  localStorage.removeItem('openrouter_key');
+                }}
+                className="w-full mt-3 text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                Clear saved key
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
