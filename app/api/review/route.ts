@@ -41,7 +41,6 @@ import { detectLanguage, getProfile, getLanguageRoutingOverride, buildLanguagePr
 import { buildCodeContext } from '@/lib/code-context-manager';
 import { runParallel2, unwrapOrDefault } from '@/lib/parallel-pipeline';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
 export interface Issue {
   type: 'bug' | 'risk' | 'suggestion';
   severity: 'high' | 'medium' | 'low';
@@ -114,22 +113,23 @@ const VALID_LANGUAGES = new Set(['auto', 'javascript', 'typescript', 'python', '
 const MODEL_CHAIN = [
   'openai/gpt-4o-mini',
   'anthropic/claude-3-haiku',
-  'meta-llama/llama-3.1-8b-instruct:free', 
-  'google/gemma-2-9b-it:free',             
-  'mistralai/mistral-7b-instruct:free',    
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'google/gemma-2-9b-it:free',
+  'mistralai/mistral-7b-instruct:free',
 ];
 
 function startKeepalive(ctrl: ReadableStreamDefaultController, enc: TextEncoder): ReturnType<typeof setInterval> {
   return setInterval(() => { try { ctrl.enqueue(enc.encode(': keepalive\n\n')); } catch { /* stream closed */ } }, 10_000);
 }
 
+// FIX: Added Taint Path Hallucination Guard to stop AI from inventing fake data flows
 const FAST_PROMPT = `You are a principal security engineer performing a thorough security audit.
 Deterministic engines have already run — your job is finding what they missed AND validating everything independently.
-CRITICAL — SMALL/SIMPLE CODE IS NOT AUTOMATICALLY SAFE: Short or simple-looking code frequently contains
-high-severity issues: hardcoded secrets, SQL injection, eval on user input, missing auth checks,
-prototype pollution, weak crypto, race conditions. Scrutinize every line regardless of code size.
+CRITICAL LANGUAGE CHECK: If the code provided is Python, Rust, Go, or Java, but you were told it is JavaScript, IGNORE the JavaScript hint and analyze the code in its actual native language.
+CRITICAL — SMALL/SIMPLE CODE IS NOT AUTOMATICALLY SAFE: Short or simple-looking code frequently contains high-severity issues: hardcoded secrets, SQL injection, eval on user input, missing auth checks, prototype pollution, weak crypto, race conditions. Scrutinize every line regardless of code size.
 WHAT TO FIND: Logic bugs, Auth/authz, Business logic, Type coercion, Async bugs, Hidden eval sinks, Dead validators, Secrets/config, Missing rate limits.
 STRICT DEDUPLICATION: Same root-cause at N lines → ONE finding mentioning all lines.
+TAINT PATH HALLUCINATION GUARD: Do NOT invent taint chains or claim a variable reaches a sink if the code does not explicitly show it. If you cannot trace the exact variable to the sink, do not report it as a taint flow.
 CONFIDENCE CALIBRATION (0.0-1.0): 0.90-0.98 (proven), 0.70-0.89 (strong), 0.40-0.69 (risk), <0.40 (skip).
 FALSE POSITIVE GUARD: db.query(sql,[params]) is NOT SQLi. encodeHtml output is NOT XSS.
 Return ONLY raw JSON: { "summary": "...", "score":N, "language": "js", "issues":[{"type": "bug", "severity": "high", "category": "security", "line":N, "title": "...", "explanation": "...", "fix": "...", "exploitChain": "...", "confidence":0.92}]}`;
@@ -290,8 +290,6 @@ export async function POST(req: NextRequest) {
         obs.endStage('adaptive-routing');
         
         const routedBudget = getTokenBudget(routeDecision.tier, code.split('\n').length);
-        
-        // Cap tokens to prevent 402 "cannot afford" errors on low-credit free accounts
         if (routedBudget.perRole > 800) routedBudget.perRole = 800;
         if (routedBudget.diff > 800) routedBudget.diff = 800;
 
@@ -367,9 +365,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Remaining pipeline stages (Reachability, Exploit Replay, Root-Cause, Decay, Clustering, Scoring, Chains, Semantic, Trust, Firewall, Differential, Symbolic, Bayes, FW-v2, Remediation, RiskModel, Memory, Parallel RTV/WSG, Proof, Knowledge, Dominance, FP Minimizer, Delta, Incremental, ModelSpec, MemoryRefinement, Policy, Benchmark)
-        // ... (Kept identical to your working logic, just stripped of version tags for cleanliness) ...
-        
         emit({ type: 'stage', stage: 'audit', label: '🧬 Stage 6 — Root-cause graph: collapsing duplicates...' });
         let rcGraph = buildRootCauseGraph(asUtilIssues(finalIssues)); let rcIssues = graphToIssues(rcGraph); let graphSummary = buildGraphSummary(rcGraph);
         
@@ -426,8 +421,13 @@ export async function POST(req: NextRequest) {
         const proofReport = runProofObligationEngine(combinedV13Issues, code); const provedIssues = proofObligationToIssues(proofReport); const proofSummary = getProofObligationSummary(proofReport);
         const knowledgeReport = applySecurityKnowledgeGraph(provedIssues, code); const enrichedIssues = knowledgeGraphToIssues(knowledgeReport); const postV13Issues = enrichedIssues;
 
-        const deterministicTitleSet = new Set<string>([...ruleIssues.map(i => i.title), ...taintIssues.map(i => i.title), ...pipelineIssues.map(i => i.title)]);
-        const dominanceResult = applyDeterministicDominance(postV13Issues, code, deterministicTitleSet); const postDominanceIssues = dominanceResult.issues;
+        emit({ type: 'stage', stage: 'audit', label: '⚖️ Stage 24 — Deterministic dominance: AI proposes, deterministic decides...' });
+        obs.startStage('deterministic-dominance');
+        const originalDeterministicIssues = [...ruleIssues, ...taintIssues, ...pipelineIssues];
+        const dominanceResult = applyDeterministicDominance(postV13Issues, code, originalDeterministicIssues);
+        const postDominanceIssues = dominanceResult.issues;
+        obs.endStage('deterministic-dominance');
+
         const fpResult = applyFPMinimizer(postDominanceIssues, code); const postFPIssues = fpResult.issues;
         const deltaResult = runDeltaAnalysis(postFPIssues, code);
         const graphResult = buildIncrementalGraph(code, cacheKey(code));
@@ -439,12 +439,43 @@ export async function POST(req: NextRequest) {
         recordScanIssues(teamSuppressionFiltered.map(i => ({ title: i.title, category: i.category, severity: i.severity, confidence: i.confidence, line: i.line })));
         const memRefinedStats = getRefinedMemoryStats();
 
-        const policyResult = applyPolicyLayer(teamSuppressionFiltered); const ciGate = evaluateCIGate(policyResult.auditLog);
+        const policyResult = applyPolicyLayer(teamSuppressionFiltered);
+        let ciGate = evaluateCIGate(policyResult.auditLog);
+
+        // ── STRICT CI GATE OVERRIDE (v1.4.3) ──────────────────────────────────────
+        // A production CI gate MUST fail if there are ANY High/Critical bugs.
+        const highCriticalBugs = teamSuppressionFiltered.filter(i => 
+          i.type === 'bug' && (i.severity === 'high' || i.severity === 'critical')
+        );
+        if (highCriticalBugs.length > 0) {
+          ciGate = { pass: false, ciBlockReason: `${highCriticalBugs.length} High/Critical vulnerability(ies) found. Merge blocked.` };
+        }
 
         let benchReport: { precision: number; recall: number; f1: number; fpRate: number; regressions: number } | undefined;
         try { const benchResults = runBenchmark(TEST_VECTORS, (vecCode) => { try { return runSecurityRules(vecCode); } catch { return []; } }); const benchStats = calculateStats(benchResults); const prevRunId = getLatestRunId(); const regReport = detectRegressions(`run-${Date.now()}`, benchResults, prevRunId); benchReport = { precision: Math.round(benchStats.precision * 100) / 100, recall: Math.round(benchStats.recall * 100) / 100, f1: Math.round(benchStats.f1 * 100) / 100, fpRate: Math.round(benchStats.fpRate * 100) / 100, regressions: regReport.regressions.length }; } catch(e) {}
 
-        const finalV14Issues = policyResult.issues;
+        // ── FINAL AGGRESSIVE DEDUPLICATION (v1.4.3) ───────────────────────────────
+        // Merges findings that share the same line number and vulnerability family
+        const preDedupIssues = policyResult.issues;
+        const familyRegex = /sqli|sql.inject|command.inject|cmd.inject|path.travers|xss|jwt|auth.bypass|secret|credential/i;
+        const dedupMap = new Map<string, Issue>();
+        
+        for (const issue of preDedupIssues) {
+          const familyMatch = (issue.title + ' ' + issue.explanation).match(familyRegex);
+          const family = familyMatch ? familyMatch[0].toLowerCase() : issue.title.toLowerCase().slice(0, 20);
+          const lineKey = issue.line ?? 'null';
+          const dedupKey = `${family}:${lineKey}`;
+          
+          if (!dedupMap.has(dedupKey)) {
+            dedupMap.set(dedupKey, { ...issue });
+          } else {
+            const existing = dedupMap.get(dedupKey)!;
+            if (issue.exploitChain && !existing.exploitChain) existing.exploitChain = issue.exploitChain;
+            if (issue.fix && !existing.fix) existing.fix = issue.fix;
+          }
+        }
+        const finalV14Issues = Array.from(dedupMap.values());
+
         const bc = finalV14Issues.filter(i => i.type==='bug').length; const rc = finalV14Issues.filter(i => i.type==='risk').length;
         const finalWeightedScore = computeWeightedScore(finalV14Issues, families, code, decayStats); score = finalWeightedScore.score;
 

