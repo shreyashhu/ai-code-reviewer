@@ -1,6 +1,6 @@
-# Code Lens — v2.0.0
+# AI Code Reviewer — v2.0.0
 
-A source-anchored AI code reviewer built on Next.js. Paste or upload text-based code or configuration, then get a scored review where retained findings point back to the submitted source.
+AI Code Reviewer is a source-anchored review app built on Next.js. Paste or upload text-based code or configuration, then get a scored review where retained findings point back to the submitted source.
 
 **Live demo:** [Try it live on Vercel](https://ai-code-reviewer-kappa-navy.vercel.app/)  
 **Desktop App:** [Download for Windows (.exe)](../../releases/latest) — Native desktop experience, no browser or Node.js required.
@@ -23,7 +23,7 @@ It reviews security, logic, maintainability, and performance issues—including 
 - **Evidence-first findings:** a final quality gate requires a valid source location and supporting code signal for bugs and risks. Findings are labelled *Source verified* or *Source anchored* so confidence is visible rather than implied.
 - **Broader input support:** text-based files, source extensions, and configuration formats are accepted. Files over 2 MB and binary uploads receive an actionable error.
 - **Dark and light themes:** the selected theme is saved locally and applies to the editor, panels, controls, and results view.
-- **Sharper product UI:** Code Lens v2.0 pairs a glassy, native-feeling layout with precise compact controls and improved readability.
+- **Sharper product UI:** AI Code Reviewer v2.0 pairs a glassy, native-feeling layout with precise compact controls and improved readability.
 - **Honest review language:** clean results never guarantee safety; manual review remains appropriate for production decisions.
 
 ---

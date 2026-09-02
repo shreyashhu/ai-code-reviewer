@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'AI Code Reviewer v2.0',
-  description: 'Source-anchored code review with deterministic checks and evidence-gated AI findings.',
+  description: 'Source-anchored code review with deterministic checks and evidence-gated findings.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

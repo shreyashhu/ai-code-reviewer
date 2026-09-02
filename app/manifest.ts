@@ -3,8 +3,8 @@ import { MetadataRoute } from 'next'
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'AI Code Reviewer',
-    short_name: 'CodeReview',
-    description: 'Evidence-first AI code review with source-anchored findings.',
+    short_name: 'AI Code Reviewer',
+    description: 'Evidence-first code review with source-anchored findings.',
     start_url: '/',
     display: 'standalone',
     background_color: '#0c0d19',

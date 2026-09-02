@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
 
   const code = rawCode.trim(), langHint = rawLanguage && rawLanguage !== 'auto' ? rawLanguage : 'auto-detect';
   const preferred = rawModel && rawModel !== 'auto' ? rawModel : 'openai/gpt-4o-mini';
-  const client = new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', defaultHeaders: { 'HTTP-Referer': 'https://ai-code-review.dev', 'X-Title': 'AI Code Review v1.5' } });
+  const client = new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', defaultHeaders: { 'HTTP-Referer': 'https://ai-code-review.dev', 'X-Title': 'AI Code Reviewer v2.0' } });
   const FALLBACK: ReviewResult = { summary: 'Analysis failed. Please try again.', score: 0, language: 'unknown', issues: [], optimized_code: '', auditPassed: false, auditDetail: 'Parse failure.' };
 
   const detectedLang = detectLanguage(code, langHint) as LanguageId;
@@ -358,7 +358,7 @@ export async function POST(req: NextRequest) {
           const consensusIssues = consensusResult.issues as Issue[];
           finalIssues = semanticDedup([...mergedDet, ...consensusIssues]);
           finalSummary = consensusResult.summary; finalLanguage = consensusResult.language;
-          consensusStatsFinal = { taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, projectIndex: projectIndexSummary, consensusStats: consensusResult.consensusStats, astPatchesApplied: 0, engineVersion: 'v1.5-consensus' };
+          consensusStatsFinal = { taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, projectIndex: projectIndexSummary, consensusStats: consensusResult.consensusStats, astPatchesApplied: 0, engineVersion: 'v2.0-consensus' };
         }
 
         obs.recordStageResult('ai-review', mergedDet.length, finalIssues.length);
@@ -367,7 +367,7 @@ export async function POST(req: NextRequest) {
           emit({ type: 'stage', stage: 'audit', label: '✅ No issues found — skipping post-processing stages' });
           const obsReport = obs.report(); obs.logSummary(); recordScanToProcessStats(obsReport); const cacheStats = getCacheStats();
           const cleanScore = routeDecision.tier === 'deterministic-only' ? 92 : routeDecision.tier === 'single-reviewer' ? 95 : 100;
-          const result: ReviewResult = { summary: finalSummary || 'No security issues detected.', score: cleanScore, language: finalLanguage, issues: [], optimized_code: '', auditPassed: true, auditDetail: 'No issues detected.', pipelineMetadata: { taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, projectIndex: projectIndexSummary, astPatchesApplied: 0, engineVersion: 'v1.5', adaptiveRoute: { tier: routeDecision.tier, reason: routeDecision.reason, estimatedTokenRatio: routeDecision.estimatedTokenRatio, complexityScore: routeDecision.signals.complexityScore }, observability: { totalDurationMs: obsReport.totalDurationMs, totalTokens: obsReport.totalInputTokens + obsReport.totalOutputTokens, estimatedCostUsd: obsReport.estimatedCostUsd, slowestStage: obsReport.slowestStage, cacheHitRate: obsReport.cacheHitSummary.rate }, analysisCache: { hitRate: cacheStats.hitRate, estimatedSavedTokens: cacheStats.estimatedSavedTokens } } };
+          const result: ReviewResult = { summary: finalSummary || 'No security issues detected.', score: cleanScore, language: finalLanguage, issues: [], optimized_code: '', auditPassed: true, auditDetail: 'No issues detected.', pipelineMetadata: { taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, projectIndex: projectIndexSummary, astPatchesApplied: 0, engineVersion: 'v2.0', adaptiveRoute: { tier: routeDecision.tier, reason: routeDecision.reason, estimatedTokenRatio: routeDecision.estimatedTokenRatio, complexityScore: routeDecision.signals.complexityScore }, observability: { totalDurationMs: obsReport.totalDurationMs, totalTokens: obsReport.totalInputTokens + obsReport.totalOutputTokens, estimatedCostUsd: obsReport.estimatedCostUsd, slowestStage: obsReport.slowestStage, cacheHitRate: obsReport.cacheHitSummary.rate }, analysisCache: { hitRate: cacheStats.hitRate, estimatedSavedTokens: cacheStats.estimatedSavedTokens } } };
           emit({ type: 'done', result }); return;
         }
 
@@ -519,7 +519,7 @@ export async function POST(req: NextRequest) {
           score, language: finalLanguage, issues: finalV14Issues, optimized_code: optimizedCode, auditPassed: ciGate.pass,
           auditDetail: finalV14Issues.length > 0 ? `${clusterStats.familyCount} vuln family(ies), ${clusterStats.collapsed} collapsed, ${suppressedIssues.length} decay-suppressed, ${trustResult.stats.suppressedCount} trust-suppressed, ${firewallResult.stats.droppedCount}+${fw2Result?.stats.droppedCount ?? 0} firewall-dropped, ${memoryResult.stats.suppressed} memory-suppressed, ${policyResult.stats.suppressed} policy-suppressed. Score: ${score}/100.${ciGate.pass ? '' : ` ⛔ CI BLOCKED: ${ciGate.ciBlockReason}`}` : 'No issues detected.',
           pipelineMetadata: {
-            taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, consensusStats: consensusStatsFinal?.consensusStats, projectIndex: projectIndexSummary, astPatchesApplied: astPatchCount, engineVersion: 'v1.5',
+            taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, consensusStats: consensusStatsFinal?.consensusStats, projectIndex: projectIndexSummary, astPatchesApplied: astPatchCount, engineVersion: 'v2.0',
             rootCauseGraph: { uniqueSurfaces: rcGraph.uniqueSurfaces, collapsed: rcGraph.collapsedCount, suppressed: rcGraph.suppressedCount, totalInput: rcGraph.totalInput },
             decayStats, clusterStats, scoringBreakdown: { positiveRewards: finalWeightedScore.positiveRewards, adjustedDeductions: finalWeightedScore.adjustedDeductions, securityRewards: finalWeightedScore.securityRewards }, attackChains: chainResult,
             semanticGraph: getSemanticGraphSummary(buildSemanticGraph(code)), hallucinationFirewall: firewallResult.stats, trustModel: trustResult.stats, changeSurface: changeSurfaceSummary, symbolicExecution: undefined, bayesianCalibration: bayesResult?.stats, firewallV2: fw2Result?.stats,
