@@ -40,6 +40,13 @@ export interface ConsensusResult {
   issues:          ConsensusIssue[];
   escalated:       ConsensusIssue[];
   consensusStats:  { total: number; agreed: number; escalated: number; rejected: number };
+  aiReview: {
+    requestedModel: string;
+    status: 'complete' | 'partial' | 'unavailable';
+    completedRoles: number;
+    failedRoles: string[];
+    judgeCompleted: boolean;
+  };
 }
 
 // ─── Role-Specific Prompts ─────────────────────────────────────────────────────
@@ -172,13 +179,18 @@ function safeJSON(raw: string): Record<string, unknown> {
 }
 
 // ─── Role caller ─────────────────────────────────────────────────────────────
+interface RoleCallResult {
+  content: string;
+  error: string | null;
+}
+
 async function callRole(
   client: OpenAI,
   model: string,
   systemPrompt: string,
   userMsg: string,
   maxTokens: number,
-): Promise<string> {
+): Promise<RoleCallResult> {
   try {
     const res = await client.chat.completions.create({
       model,
@@ -186,9 +198,13 @@ async function callRole(
       temperature: 0.1,
       max_tokens: maxTokens,
     });
-    return res.choices[0]?.message?.content ?? '{}';
-  } catch {
-    return '{}';
+    return { content: res.choices[0]?.message?.content ?? '{}', error: null };
+  } catch (error) {
+    const status = (error as { status?: unknown })?.status;
+    return {
+      content: '{}',
+      error: typeof status === 'number' ? `HTTP ${status}` : 'request failed',
+    };
   }
 }
 
@@ -408,6 +424,7 @@ export async function runConsensus(
       issues: [],
       escalated: [],
       consensusStats: { total: 0, agreed: 0, escalated: 0, rejected: 0 },
+      aiReview: { requestedModel: model, status: 'unavailable', completedRoles: 0, failedRoles: [], judgeCompleted: false },
     };
   }
 
@@ -415,7 +432,7 @@ export async function runConsensus(
   const noDetFindings = baseIssues.length === 0;
 
   // Run all 4 roles in parallel (saves latency vs serial)
-  const [analyzerRaw, criticRaw, verifierRaw, fixRaw] = await Promise.all([
+  const roleResponses = await Promise.all([
     callRole(client, model, ANALYZER_ROLE,
       `Language: ${langHint}\n${noDetFindings ? 'RULE ENGINE: no deterministic findings — perform full independent security review. Small or simple code is NOT automatically safe.' : `RULE ENGINE (already confirmed, do not re-report): ${ruleCtx}`}\nTAINT: ${taintCtx}\n\nCODE:\n${code.slice(0, 4000)}\n\nFind issues engines missed. Return JSON.`,
       budgetPerPass),
@@ -433,7 +450,35 @@ export async function runConsensus(
       budgetPerPass),
   ]);
 
-  const [aData, cData, vData, fData] = [analyzerRaw, criticRaw, verifierRaw, fixRaw].map(safeJSON);
+  const [analyzerRaw, criticRaw, verifierRaw, fixRaw] = roleResponses;
+  const roleNames = ['analyzer', 'critic', 'exploit verifier', 'fix validator'];
+  const failedRoles = roleResponses.flatMap((response, index) =>
+    response.error ? [`${roleNames[index]} (${response.error})`] : [],
+  );
+  const completedRoles = roleResponses.length - failedRoles.length;
+
+  const [aData, cData, vData, fData] = [analyzerRaw, criticRaw, verifierRaw, fixRaw]
+    .map(response => safeJSON(response.content));
+
+  // Do not fabricate consensus when every remote reviewer failed. Deterministic
+  // findings remain useful, but must be presented as static-only evidence.
+  if (completedRoles === 0) {
+    const staticIssues = baseIssues.map(issue => ({
+      ...issue,
+      consensusScore: 0,
+      escalate: false,
+      roleVotes: { analyzer: 'uncertain', critic: 'uncertain', exploitVerifier: 'uncertain', fixValidator: 'none' },
+    })) as ConsensusIssue[];
+    return {
+      summary: 'Static analysis complete. AI consensus was unavailable for this scan.',
+      score: 0,
+      language: langHint,
+      issues: staticIssues,
+      escalated: [],
+      consensusStats: { total: baseIssues.length, agreed: 0, escalated: 0, rejected: 0 },
+      aiReview: { requestedModel: model, status: 'unavailable', completedRoles: 0, failedRoles, judgeCompleted: false },
+    };
+  }
 
   // When baseIssues is empty (no deterministic hits), the Analyzer may have found
   // new issues independently. Promote those to the base issue list so arbitrate can process them.
@@ -468,10 +513,21 @@ export async function runConsensus(
     issues: [...votes.entries()].map(([title, v]) => ({ title, ...v })),
   });
 
-  const judgeRaw = await callRole(client, model, JUDGE_ROLE,
+  const judgeResponse = await callRole(client, model, JUDGE_ROLE,
     `Language: ${langHint}\nVOTES:\n${judgeInput.slice(0, 3000)}\n\nArbitrate. Return final JSON.`,
     budgetPerPass);
-  const judgeData = safeJSON(judgeRaw);
+  const judgeData = safeJSON(judgeResponse.content);
+  if (judgeResponse.error) failedRoles.push(`judge (${judgeResponse.error})`);
 
-  return arbitrate(effectiveBase, votes, judgeData);
+  const result = arbitrate(effectiveBase, votes, judgeData);
+  return {
+    ...result,
+    aiReview: {
+      requestedModel: model,
+      status: failedRoles.length === 0 ? 'complete' : 'partial',
+      completedRoles,
+      failedRoles,
+      judgeCompleted: !judgeResponse.error,
+    },
+  };
 }

@@ -75,6 +75,7 @@ export interface ReviewResult {
     taintSources: number; callGraphNodes: number; frameworksDetected: string[];
     projectIndex?: { files: number; routes: number; sensitiveRoutes: number; unauthenticatedSensitiveRoutes: number; imports: number; exports: number; crossFileEdges: number };
     consensusStats?: { total: number; agreed: number; escalated: number; rejected: number };
+    aiReview?: { requestedModel: string; status: 'complete' | 'partial' | 'unavailable'; completedRoles: number; failedRoles: string[]; judgeCompleted: boolean };
     astPatchesApplied: number; engineVersion: string;
     rootCauseGraph?: { uniqueSurfaces: number; collapsed: number; suppressed: number; totalInput: number };
     decayStats?: DecayStats; clusterStats?: ClusterStats;
@@ -90,7 +91,7 @@ export interface ReviewResult {
     securityMemory?: { newFindings: number; recurringFindings: number; suppressed: number; escalated: number; resolvedFindings: number };
     observability?: { totalDurationMs: number; totalTokens: number; estimatedCostUsd: number; slowestStage: string | null; cacheHitRate: number };
     analysisCache?: { hitRate: number; estimatedSavedTokens: number };
-    runtimeVerification?: { total: number; verified: number; blocked: number; partial: number; unreachable: number; upgraded: number; downgraded: number };
+    runtimeVerification?: { mode: 'static-simulation'; total: number; verified: number; blocked: number; partial: number; unreachable: number; upgraded: number; downgraded: number };
     wholeSystemGraph?: WholeSystemSummary;
     proofObligations?: { total: number; valid: number; weak: number; suppressed: number; hallucinations: number };
     knowledgeGraph?: { cweMatched: number; cveMatched: number; exploitMatched: number; avgCvss: number };
@@ -523,7 +524,7 @@ export async function POST(req: NextRequest) {
           score, language: finalLanguage, issues: finalV14Issues, optimized_code: optimizedCode, auditPassed: ciGate.pass,
           auditDetail: finalV14Issues.length > 0 ? `${clusterStats.familyCount} vuln family(ies), ${clusterStats.collapsed} collapsed, ${suppressedIssues.length} decay-suppressed, ${trustResult.stats.suppressedCount} trust-suppressed, ${firewallResult.stats.droppedCount}+${fw2Result?.stats.droppedCount ?? 0} firewall-dropped, ${memoryResult.stats.suppressed} memory-suppressed, ${policyResult.stats.suppressed} policy-suppressed. Score: ${score}/100.${ciGate.pass ? '' : ` ⛔ CI BLOCKED: ${ciGate.ciBlockReason}`}` : 'No issues detected.',
           pipelineMetadata: {
-            taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, consensusStats: consensusStatsFinal?.consensusStats, projectIndex: projectIndexSummary, astPatchesApplied: astPatchCount, engineVersion: 'v2.0',
+            taintSources: tr.taintedVars.size, callGraphNodes: pr.callGraph.nodes.size, frameworksDetected: pr.frameworkContext.detected, consensusStats: consensusStatsFinal?.consensusStats, aiReview: consensusStatsFinal?.aiReview, projectIndex: projectIndexSummary, astPatchesApplied: astPatchCount, engineVersion: 'v2.0',
             rootCauseGraph: { uniqueSurfaces: rcGraph.uniqueSurfaces, collapsed: rcGraph.collapsedCount, suppressed: rcGraph.suppressedCount, totalInput: rcGraph.totalInput },
             decayStats, clusterStats, scoringBreakdown: { positiveRewards: finalWeightedScore.positiveRewards, adjustedDeductions: finalWeightedScore.adjustedDeductions, securityRewards: finalWeightedScore.securityRewards }, attackChains: chainResult,
             semanticGraph: getSemanticGraphSummary(buildSemanticGraph(code)), hallucinationFirewall: firewallResult.stats, trustModel: trustResult.stats, changeSurface: changeSurfaceSummary, symbolicExecution: undefined, bayesianCalibration: bayesResult?.stats, firewallV2: fw2Result?.stats,
@@ -534,13 +535,13 @@ export async function POST(req: NextRequest) {
             securityMemory: { newFindings: memoryResult.stats.newFindings, recurringFindings: memoryResult.stats.recurringFindings, suppressed: memoryResult.stats.suppressed, escalated: memoryResult.stats.escalated, resolvedFindings: memoryResult.stats.resolvedFindings },
             observability: { totalDurationMs: obsReport.totalDurationMs, totalTokens: obsReport.totalInputTokens + obsReport.totalOutputTokens, estimatedCostUsd: obsReport.estimatedCostUsd, slowestStage: obsReport.slowestStage, cacheHitRate: obsReport.cacheHitSummary.rate },
             analysisCache: { hitRate: cacheStats.hitRate, estimatedSavedTokens: cacheStats.estimatedSavedTokens },
-            runtimeVerification: { total: runtimeVerifReport.stats.total, verified: runtimeVerifReport.stats.verified, blocked: runtimeVerifReport.stats.blocked, partial: runtimeVerifReport.stats.partial, unreachable: runtimeVerifReport.stats.unreachable, upgraded: runtimeVerifReport.stats.upgraded, downgraded: runtimeVerifReport.stats.downgraded },
+            runtimeVerification: { mode: 'static-simulation', total: runtimeVerifReport.stats.total, verified: runtimeVerifReport.stats.verified, blocked: runtimeVerifReport.stats.blocked, partial: runtimeVerifReport.stats.partial, unreachable: runtimeVerifReport.stats.unreachable, upgraded: runtimeVerifReport.stats.upgraded, downgraded: runtimeVerifReport.stats.downgraded },
             wholeSystemGraph: wholeSysSummary, proofObligations: proofSummary, knowledgeGraph: { cweMatched: knowledgeReport.stats.cweMatched, cveMatched: knowledgeReport.stats.cveMatched, exploitMatched: knowledgeReport.stats.exploitMatched, avgCvss: knowledgeReport.stats.avgCvss },
             deterministicDominance: { total: dominanceResult.stats.total, confirmed: dominanceResult.stats.confirmed, annotated: dominanceResult.stats.annotated, rejected: dominanceResult.stats.rejected, deterministic: dominanceResult.stats.deterministic, hallucinationsKilled: dominanceResult.stats.hallucinationsKilled },
             fpMinimizer: { total: fpResult.stats.total, frameworkSafe: fpResult.stats.frameworkSafe, sanitizerCertain: fpResult.stats.sanitizerCertain, deadCode: fpResult.stats.deadCode, privilegeGated: fpResult.stats.privilegeGated, testCode: fpResult.stats.testCode, typeSafe: fpResult.stats.typeSafe, active: fpResult.stats.active },
             deltaAnalysis: { mode: deltaResult.mode, newIssues: deltaResult.newIssues.length, regressions: deltaResult.regressions.length, resolved: deltaResult.resolvedIssues.length, newTrustBoundaries: deltaResult.newTrustBoundaries, newSinks: deltaResult.newSinks },
             incrementalGraph: graphResult.stats, policyLayer: { total: policyResult.stats.total, suppressed: policyResult.stats.suppressed, escalated: policyResult.stats.escalated, demoted: policyResult.stats.demoted, requireFix: policyResult.stats.requireFix, ciGate: ciGate.pass, ciBlockReason: ciGate.ciBlockReason },
-            modelSpecialization: { securityModel: secAssignment.modelId, remediationModel: remAssignment.modelId, estimatedCostSavingPct: costSaving },
+            modelSpecialization: { securityModel: preferred, remediationModel: preferred, estimatedCostSavingPct: costSaving },
             memoryRefinement: { activeVulns: memRefinedStats.activeVulns, resolvedVulns: memRefinedStats.resolvedVulns, teamSuppressions: memRefinedStats.teamSuppressions, escalatingDrifts: memRefinedStats.escalatingDrifts, volatileDrifts: memRefinedStats.volatileDrifts },
             benchmarkStats: benchReport, languageProfile: { detected: detectedLang, hint: langHint, criticalSinksFound: langProfile.criticalSinks.filter(p => p.test(code)).length, routingOverride: langRoutingOverride, supplement: langSupplement.length > 0 },
             smartContext: contextResult.truncated ? { totalLines: contextResult.totalLines, keptLines: contextResult.keptLines, truncated: contextResult.truncated, securityDensity: contextResult.securityDensity, hotspotCount: contextResult.hotspots.length } : undefined,

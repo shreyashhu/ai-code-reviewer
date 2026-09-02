@@ -547,8 +547,10 @@ export function detectLanguage(code: string, langHint: string): LanguageId {
   const scores: Partial<Record<LanguageId, number>> = {};
   function add(lang: LanguageId, n: number) { scores[lang] = (scores[lang] ?? 0) + n; }
 
-  if (/^\s*import\s+\w+\s+from\s+['"]/m.test(code) || /const\s+\w+\s*=\s*require\s*\(/.test(code)) add('javascript', 10);
-  if (/:\s*(?:string|number|boolean|void|interface|type\s+\w+\s*=)\b/.test(code) || /async\s+\w+\s*\([^)]*:\s*\w+/.test(code)) add('typescript', 12);
+  // Strong syntax signals must outrank embedded strings. A JavaScript file can
+  // legitimately contain SELECT statements; that does not make the file SQL.
+  if (/^\s*import\s+\w+\s+from\s+['"]/m.test(code) || /const\s+\w+\s*=\s*require\s*\(/.test(code) || /\b(?:app|router)\.(?:get|post|put|patch|delete)\s*\(/.test(code)) add('javascript', 20);
+  if (/:\s*(?:string|number|boolean|void|interface|type\s+\w+\s*=)\b/.test(code) || /async\s+\w+\s*\([^)]*:\s*\w+/.test(code)) add('typescript', 30);
   if (/def\s+\w+\s*\(|import\s+\w+\n|from\s+\w+\s+import|print\s*\(/.test(code)) add('python', 10);
   if (/\$_(?:GET|POST|REQUEST|COOKIE)|<\?php/.test(code)) add('php', 15);
   if (/public\s+(?:static\s+)?(?:void\s+main|class\s+\w+)|import\s+java\./.test(code)) add('java', 12);

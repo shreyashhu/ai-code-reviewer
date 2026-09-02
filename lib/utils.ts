@@ -81,6 +81,13 @@ export interface ReviewResult {
     callGraphNodes:     number;
     frameworksDetected: string[];
     consensusStats?:    { total: number; agreed: number; escalated: number; rejected: number };
+    aiReview?: {
+      requestedModel: string;
+      status: 'complete' | 'partial' | 'unavailable';
+      completedRoles: number;
+      failedRoles: string[];
+      judgeCompleted: boolean;
+    };
     astPatchesApplied:  number;
     engineVersion:      string;
     rootCauseGraph?: {
