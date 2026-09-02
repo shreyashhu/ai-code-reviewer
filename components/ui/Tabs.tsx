@@ -18,13 +18,17 @@ interface TabsProps {
 
 export function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
   return (
-    <div className={cn('flex items-center gap-1 border-b', className)} style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+    <div role="tablist" aria-label="Review results" className={cn('flex items-center gap-1 border-b overflow-x-auto', className)} style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
       {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
         return (
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
+            role="tab"
+            aria-selected={isActive}
+            aria-controls={`review-panel-${tab.id}`}
+            id={`review-tab-${tab.id}`}
             className={cn(
               'relative flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium',
               'transition-colors duration-200 rounded-t-lg whitespace-nowrap',

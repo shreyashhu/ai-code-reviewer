@@ -115,6 +115,7 @@ export const CodeEditor = memo(function CodeEditor({
         autoCapitalize="off"
         autoCorrect="off"
         autoComplete="off"
+        aria-label="Source code editor"
         data-gramm="false"
         placeholder={`// Paste or type your ${language} code here…`}
         className="flex-1 resize-none outline-none border-none bg-transparent overflow-auto"

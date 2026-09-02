@@ -14,7 +14,7 @@ interface ThemeSwitchProps {
 /** A visible two-state control rather than a hidden preference behind one icon. */
 export function ThemeSwitch({ value, onChange, className }: ThemeSwitchProps) {
   return (
-    <div className={cn('theme-switch', className)} aria-label="Appearance">
+    <div className={cn('theme-switch', className)} role="group" aria-label="Appearance">
       <button
         type="button"
         aria-pressed={value === 'light'}

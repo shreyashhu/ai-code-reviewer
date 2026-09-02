@@ -89,7 +89,7 @@ export function AnalysisPanel({ result, isLoading, loadingMessage, error, origin
       )}
 
       <div className="flex-1 overflow-y-auto">
-        <div key={activeTab} className="p-4 fade-in-up">
+        <div key={activeTab} id={`review-panel-${activeTab}`} role="tabpanel" aria-labelledby={`review-tab-${activeTab}`} className="p-4 fade-in-up">
           {activeTab === 'overview'    && <OverviewTab    result={result}      isLoading={isLoading} loadingMessage={loadingMessage} />}
           {activeTab === 'bugs'        && <IssueList      issues={bugs}        isLoading={isLoading} emptyLabel="No bugs detected" emptyPositive />}
           {activeTab === 'risks'       && <IssueList      issues={risks}       isLoading={isLoading} emptyLabel="No risks detected" emptyPositive />}

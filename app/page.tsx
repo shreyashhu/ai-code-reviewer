@@ -68,37 +68,6 @@ const PIPELINE_STAGES = [
   { icon: CheckCircle2, label: 'Publish reviewed findings', key: 'audit'    },
 ];
 
-const Retro_COMMANDS = [
-  { delay: 0, output: '[*] Initializing 31-stage security pipeline...' },
-  { delay: 400, output: '[+] Loading security rules engine (60+ patterns)...' },
-  { delay: 800, output: '[*] Scanning for hardcoded secrets and weak crypto...' },
-  { delay: 1200, output: '[*] Running taint analysis: tracking source→sink flows...' },
-  { delay: 1800, output: '[+] Building call graph and control flow graph...' },
-  { delay: 2500, output: '[*] Detecting framework context (Express, React, Django)...' },
-  { delay: 3200, output: '[+] Adaptive routing: analyzing code complexity...' },
-  { delay: 4000, output: '[*] Launching AI consensus: Analyzer + Critic + Verifier...' },
-  { delay: 5500, output: '[+] Synthesizing attack chains (SSRF→RCE, SQLi→auth bypass)...' },
-  { delay: 7000, output: '[*] Running exploit replay: testing payload reachability...' },
-  { delay: 8500, output: '[+] Root-cause graph: collapsing duplicate findings...' },
-  { delay: 10000, output: '[*] Confidence decay: suppressing low-signal findings...' },
-  { delay: 11500, output: '[+] Family clustering: grouping by vulnerability class...' },
-  { delay: 13000, output: '[*] Computing weighted security score...' },
-  { delay: 14500, output: '[+] Hallucination firewall: AST-backed verification...' },
-  { delay: 16000, output: '[*] Bayesian calibration: evidence-weighted severity...' },
-  { delay: 17500, output: '[+] Verified remediation: patch→taint→replay→certify...' },
-  { delay: 19000, output: '[*] Business-impact risk model: filtering fake criticals...' },
-  { delay: 20500, output: '[+] Security memory: suppressing recurring FPs...' },
-  { delay: 22000, output: '[*] Runtime verification: simulating exploit payloads...' },
-  { delay: 23500, output: '[+] Proof obligations: validating source+sink+path...' },
-  { delay: 25000, output: '[*] Knowledge graph: CVE/CWE enrichment...' },
-  { delay: 26500, output: '[+] Deterministic dominance: AI proposes, det decides...' },
-  { delay: 28000, output: '[*] FP minimizer: framework guarantees + sanitizer certainty...' },
-  { delay: 29500, output: '[+] CI/CD delta analysis: security diff vs baseline...' },
-  { delay: 31000, output: '[*] Policy layer: OWASP/PCI-DSS/SOC2 compliance...' },
-  { delay: 32500, output: '[+] Benchmark harness: precision/recall validation...' },
-  { delay: 34000, output: '[✓] Pipeline complete. Generating report...' },
-];
-
 function PipelineStatus({ isLoading, msgIdx }: { isLoading: boolean; msgIdx: number }) {
   if (!isLoading) return null;
   const activeStage = Math.min(
@@ -134,7 +103,7 @@ function PipelineStatus({ isLoading, msgIdx }: { isLoading: boolean; msgIdx: num
           );
         })}
       </div>
-      <p className="text-[10px] text-zinc-500 whitespace-nowrap flex-shrink-0 fade-in-up" key={msgIdx}>
+      <p aria-live="polite" className="text-[10px] text-zinc-500 whitespace-nowrap flex-shrink-0 fade-in-up" key={msgIdx}>
         {LOADING_MESSAGES[msgIdx]}
       </p>
     </div>
@@ -152,10 +121,7 @@ export default function HomePage() {
   
   const [userApiKey, setUserApiKey]   = useState('');
   const [showApiSettings, setShowApiSettings] = useState(false);
-  const [isRetroMode, setIsRetroMode] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [RetroLogs, setRetroLogs] = useState<string[]>([]);
-  const RetroLogRef = useRef<HTMLDivElement>(null);
   
   const [scanHistory, setScanHistory] = useState<SavedScan[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -191,12 +157,6 @@ export default function HomePage() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('review_theme', theme);
   }, [theme]);
-
-  useEffect(() => {
-    if (RetroLogRef.current) {
-      RetroLogRef.current.scrollTop = RetroLogRef.current.scrollHeight;
-    }
-  }, [RetroLogs]);
 
   useEffect(() => {
     if (isLoading) {
@@ -281,15 +241,6 @@ export default function HomePage() {
     setError(null);
     setResult(null);
 
-    if (isRetroMode) {
-      setRetroLogs([]);
-      Retro_COMMANDS.forEach(({ delay, output }) => {
-        setTimeout(() => {
-          setRetroLogs(prev => [...prev, `${new Date().toLocaleTimeString()} ${output}`]);
-        }, delay);
-      });
-    }
-
     try {
       const response = await fetch('/api/review', {
         method: 'POST',
@@ -361,11 +312,8 @@ export default function HomePage() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
-      if (isRetroMode) {
-        setRetroLogs(prev => [...prev, `${new Date().toLocaleTimeString()} [✓] Analysis complete. Results ready.`]);
-      }
     }
-  }, [code, modelId, langId, isLoading, userApiKey, isRetroMode]);
+  }, [code, modelId, langId, isLoading, userApiKey]);
 
   const handleAnalyze = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -414,43 +362,7 @@ export default function HomePage() {
   const fileName = langId !== 'auto' ? (FILE_EXT[langId] ?? `main.${langId}`) : 'main.js';
 
   return (
-    <div 
-      className={cn("app-shell flex flex-col h-screen overflow-hidden transition-colors duration-500", isRetroMode && "Retro-mode")}
-      style={{ 
-        background: isRetroMode ? '#000000' : undefined,
-        fontFamily: isRetroMode ? "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" : "inherit"
-      }}
-    >
-      {isRetroMode && (
-        <style dangerouslySetInnerHTML={{ __html: `
-          .Retro-mode {
-            background-image: 
-              linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-              linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%;
-          }
-          .Retro-mode * { text-shadow: 0 0 2px rgba(0, 255, 0, 0.4); }
-          .Retro-mode .text-zinc-100, .Retro-mode .text-zinc-300, .Retro-mode .text-white,
-          .Retro-mode .text-zinc-400, .Retro-mode .text-zinc-500 { color: #33ff33 !important; }
-          .Retro-mode .text-violet-400, .Retro-mode .text-violet-300 { color: #00ff00 !important; }
-          .Retro-mode .bg-violet-600, .Retro-mode .bg-violet-500 {
-            background-color: #00ff00 !important; 
-            color: #000000 !important; 
-            text-shadow: none !important; 
-          }
-          .Retro-mode .border-white\\/10, .Retro-mode .border-white\\/5 { border-color: rgba(0, 255, 0, 0.2) !important; }
-          .Retro-mode .bg-white\\/5 { background-color: rgba(0, 255, 0, 0.05) !important; }
-          .Retro-mode .bg-black\\/40 { background-color: rgba(0, 20, 0, 0.6) !important; }
-          
-          @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-          }
-          .cursor-blink {
-            animation: blink 1s infinite;
-          }
-        `}} />
-      )}
+    <div className="app-shell flex flex-col h-screen overflow-hidden transition-colors duration-500">
 
       <input
         ref={fileInputRef}
@@ -460,16 +372,12 @@ export default function HomePage() {
         onChange={handleFileInputChange}
       />
       
-      {!isRetroMode && (
-        <>
-          <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 80% 40% at 50% -10%, rgba(124,58,237,0.10) 0%, transparent 70%)' }} />
-          <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 40% 30% at 80% 80%, rgba(37,99,235,0.05) 0%, transparent 60%)' }} />
-        </>
-      )}
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 80% 40% at 50% -10%, rgba(22,119,255,0.11) 0%, transparent 70%)' }} />
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 40% 30% at 80% 80%, rgba(61,141,255,0.05) 0%, transparent 60%)' }} />
 
       <nav
         className="topbar relative z-20 flex-shrink-0 flex items-center justify-between px-5 py-2.5"
-        style={{ background: isRetroMode ? 'rgba(0,0,0,0.9)' : undefined, borderBottom: '1px solid var(--shell-border)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 1px 0 var(--shell-highlight)' }}
+        style={{ borderBottom: '1px solid var(--shell-border)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 1px 0 var(--shell-highlight)' }}
       >
         <div className="flex items-center gap-2.5">
           <div className="brand-mark w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
@@ -534,6 +442,7 @@ export default function HomePage() {
 
           <button
             onClick={() => setShowHistoryModal(true)}
+            aria-label="Open scan history"
             className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             title="Scan History"
           >
@@ -542,6 +451,7 @@ export default function HomePage() {
 
           <button
             onClick={() => setShowApiSettings(true)}
+            aria-label={userApiKey ? 'Edit OpenRouter API key' : 'Add OpenRouter API key'}
             className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             title={userApiKey ? "API Key Saved (Click to edit)" : "Add OpenRouter API Key"}
           >
@@ -561,73 +471,16 @@ export default function HomePage() {
       </nav>
 
       {error && (
-        <div className="relative z-20 flex-shrink-0 flex items-center gap-3 px-5 py-2.5 bg-red-500/10 border-b border-red-500/20">
+        <div role="alert" className="relative z-20 flex-shrink-0 flex items-center gap-3 px-5 py-2.5 bg-red-500/10 border-b border-red-500/20">
           <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
           <p className="text-xs text-red-300 flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 transition-colors flex-shrink-0">
+          <button onClick={() => setError(null)} aria-label="Dismiss error" className="text-red-400 hover:text-red-300 transition-colors flex-shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {!isRetroMode && <PipelineStatus isLoading={isLoading} msgIdx={loadingMsgIdx} />}
-
-      {isRetroMode && isLoading && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col" style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" }}>
-          <div className="flex items-center justify-between px-4 py-2 bg-black border-b border-green-500/30">
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              </div>
-              <span className="text-xs text-green-400 ml-2">root@ai-reviewer:~/security-audit</span>
-            </div>
-            <button
-              onClick={() => setIsRetroMode(false)}
-              className="text-green-400 hover:text-green-300 text-xs"
-            >
-              [ESC] Exit Terminal
-            </button>
-          </div>
-
-          <div 
-            ref={RetroLogRef}
-            className="flex-1 overflow-y-auto p-4 text-xs leading-relaxed"
-            style={{ 
-              color: '#33ff33',
-              textShadow: '0 0 2px rgba(0, 255, 0, 0.4)',
-              backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%)',
-              backgroundSize: '100% 2px'
-            }}
-          >
-            <div className="mb-2 text-green-600">
-              Code Lens v2.0 Evidence-First Review<br/>
-              Source-anchored deterministic + AI analysis<br/>
-              ──────────────────────────────────────────────────────────────────────
-            </div>
-            
-            {RetroLogs.map((log, idx) => (
-              <div key={idx} className="mb-1 fade-in-up">
-                <span className="text-green-600">$ </span>
-                {log}
-              </div>
-            ))}
-            
-            {isLoading && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-green-600">$ </span>
-                <span className="inline-block w-2 h-4 bg-green-500 cursor-blink"></span>
-              </div>
-            )}
-          </div>
-
-          <div className="px-4 py-2 bg-black border-t border-green-500/30 flex items-center justify-between text-xs text-green-600">
-            <span>Session: {new Date().toLocaleString()}</span>
-            <span>Target: {fileName} ({code?.split('\n').length || 0} lines)</span>
-          </div>
-        </div>
-      )}
+      <PipelineStatus isLoading={isLoading} msgIdx={loadingMsgIdx} />
 
       <main
         ref={containerRef}
@@ -641,17 +494,17 @@ export default function HomePage() {
           <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="flex items-center gap-2">
               <div className="flex gap-1.5">
-                <button onClick={handleReset} title="Reset editor" className="w-3 h-3 rounded-full group relative transition-transform hover:scale-110 active:scale-95" style={{ background: 'rgba(239,68,68,0.7)', boxShadow: '0 0 0 1px rgba(239,68,68,0.3)' }}>
+                <button onClick={handleReset} aria-label="Reset editor" title="Reset editor" className="w-3 h-3 rounded-full group relative transition-transform hover:scale-110 active:scale-95" style={{ background: 'rgba(239,68,68,0.7)', boxShadow: '0 0 0 1px rgba(239,68,68,0.3)' }}>
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <svg viewBox="0 0 8 8" width="6" height="6" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="2" x2="6" y2="6"/><line x1="6" y1="2" x2="2" y2="6"/></svg>
                   </span>
                 </button>
-                <button onClick={handleClearOutput} title="Clear output" className="w-3 h-3 rounded-full group relative transition-transform hover:scale-110 active:scale-95" style={{ background: 'rgba(234,179,8,0.7)', boxShadow: '0 0 0 1px rgba(234,179,8,0.3)' }}>
+                <button onClick={handleClearOutput} aria-label="Clear review results" title="Clear output" className="w-3 h-3 rounded-full group relative transition-transform hover:scale-110 active:scale-95" style={{ background: 'rgba(234,179,8,0.7)', boxShadow: '0 0 0 1px rgba(234,179,8,0.3)' }}>
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <svg viewBox="0 0 8 8" width="6" height="6" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="6" y2="4"/></svg>
                   </span>
                 </button>
-                <button onClick={handleAnalyze} disabled={isLoading || !code?.trim()} title="Run analysis — Ctrl+Enter" className="w-3 h-3 rounded-full group relative transition-transform hover:scale-110 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(34,197,94,0.7)', boxShadow: '0 0 0 1px rgba(34,197,94,0.3)' }}>
+                <button onClick={handleAnalyze} disabled={isLoading || !code?.trim()} aria-label="Run code review" title="Run analysis — Ctrl+Enter" className="w-3 h-3 rounded-full group relative transition-transform hover:scale-110 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(34,197,94,0.7)', boxShadow: '0 0 0 1px rgba(34,197,94,0.3)' }}>
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <svg viewBox="0 0 8 8" width="5" height="5" fill="rgba(0,0,0,0.6)"><polygon points="2,1 7,4 2,7"/></svg>
                   </span>
@@ -664,6 +517,7 @@ export default function HomePage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => fileInputRef.current?.click()}
+                aria-label="Upload a code file"
                 title="Upload code file"
                 className="flex items-center gap-1 text-[10px] text-zinc-600 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded-md hover:bg-white/5"
               >
@@ -712,6 +566,9 @@ export default function HomePage() {
         <div
           ref={dividerRef}
           onMouseDown={handleDividerMouseDown}
+          role="separator"
+          aria-label="Resize source and review panels"
+          aria-orientation="vertical"
           className="flex-shrink-0 group relative flex items-center justify-center"
           style={{ width: 6, cursor: 'col-resize', zIndex: 30 }}
         >

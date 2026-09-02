@@ -15,7 +15,7 @@ It reviews security, logic, maintainability, and performance issues—including 
 - **Verified fixes and diff view** — only offered when a candidate patch passes its safeguards
 - **CI status and exportable JSON/PDF reports**
 - **Any text-based source or configuration** — known languages get specialised analysis; unfamiliar syntax falls back to generic review instead of being rejected
-- **Local scan history**, plus a **Retro Mode** terminal view
+- **Local scan history** to revisit or export prior reviews
 - A persistent **dark/light theme** designed around glassy iOS-style surfaces and crisp Nothing-inspired controls
 
 ## What's New in v2.0.0
@@ -99,7 +99,7 @@ Final evidence gate
 1. Open the [Live Vercel Demo](https://ai-code-reviewer-kappa-navy.vercel.app/).
 2. Click the **⚙️ Gear Icon** in the top right navbar.
 3. Paste your free OpenRouter API key (get one at [openrouter.ai/keys](https://openrouter.ai/keys)).
-4. The key is saved securely in your browser's `localStorage`. Start scanning!
+4. The key is kept only for the current browser session. Start scanning!
 
 ### Option 2: Windows Desktop App (Easiest) 🖥️
 1. Go to the [Releases Page](../../releases/latest).
@@ -123,7 +123,7 @@ npm install
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000), click the **⚙️ Gear Icon** to add your API key, and click **Analyze**.
+Open [http://localhost:3000](http://localhost:3000), click the **⚙️ Gear Icon** to add your API key, and click **Review code**.
 
 *(Note: If you prefer using environment variables locally instead of the UI, create a `.env.local` file with `OPENROUTER_API_KEY=sk-or-v1-...`)*
 
@@ -153,7 +153,7 @@ Open [http://localhost:3000](http://localhost:3000), click the **⚙️ Gear Ico
 ai-code-review/
 ├── app/
 │   ├── api/review/route.ts     # Analysis pipeline, evidence gate, and BYOK routing
-│   ├── page.tsx                # Editor, themes, Retro Mode, history, and BYOK settings
+│   ├── page.tsx                # Editor, themes, history, and BYOK settings
 │   ├── layout.tsx
 │   └── manifest.ts             # PWA manifest for mobile/desktop wrapping
 ├── components/
@@ -200,5 +200,3 @@ If you want to submit code:
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE) for details.
-
-*Built by [@AlpraxIsHim](https://t.me/AlpraxIsHim)*
