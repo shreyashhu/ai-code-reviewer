@@ -40,6 +40,7 @@ import { applySecurityKnowledgeGraph, knowledgeGraphToIssues, getKnowledgeGraphC
 import { detectLanguage, getProfile, getLanguageRoutingOverride, buildLanguagePromptSupplement, getLanguageSafeSinks, type LanguageId } from '@/lib/language-profiles';
 import { buildCodeContext } from '@/lib/code-context-manager';
 import { runParallel2, unwrapOrDefault } from '@/lib/parallel-pipeline';
+import { gateFindings, type EvidenceGateStats } from '@/lib/evidence-gate';
 
 export interface Issue {
   type: 'bug' | 'risk' | 'suggestion';
@@ -65,6 +66,7 @@ export interface Issue {
   roleVotes?: { analyzer: string; critic: string; exploitVerifier: string; fixValidator: string; };
   astPatched?: boolean;
   patchConfidence?: number;
+  evidence?: { status: 'verified' | 'supported'; excerpt: string; score: number; };
 }
 
 export interface ReviewResult {
@@ -102,13 +104,13 @@ export interface ReviewResult {
     benchmarkStats?: { precision: number; recall: number; f1: number; fpRate: number; regressions: number };
     languageProfile?: { detected: string; hint: string; criticalSinksFound: number; routingOverride: string | null; supplement: boolean };
     smartContext?: { totalLines: number; keptLines: number; truncated: boolean; securityDensity: number; hotspotCount: number };
+    evidenceGate?: EvidenceGateStats;
   };
 }
 
 function asUtilIssues(issues: Issue[]): import('@/lib/utils').Issue[] { return issues as unknown as import('@/lib/utils').Issue[]; }
 
 const VALID_MODELS = new Set(['openai/gpt-4o-mini', 'openai/gpt-4o', 'anthropic/claude-3-haiku', 'anthropic/claude-3.5-sonnet', 'meta-llama/llama-3.1-8b-instruct', 'auto']);
-const VALID_LANGUAGES = new Set(['auto', 'javascript', 'typescript', 'python', 'rust', 'go', 'java', 'cpp', 'csharp', 'php', 'ruby', 'swift', 'kotlin', 'sql', 'bash']);
 
 const MODEL_CHAIN = [
   'openai/gpt-4o-mini',
@@ -234,7 +236,7 @@ export async function POST(req: NextRequest) {
   const { code: rawCode, model: rawModel, language: rawLanguage } = (body ?? {}) as { code?: string; model?: string; language?: string };
   if (!rawCode || typeof rawCode !== 'string' || !rawCode.trim()) return NextResponse.json({ error: 'code is required.' }, { status: 400 });
   if (rawModel !== undefined && !VALID_MODELS.has(rawModel)) return NextResponse.json({ error: 'Invalid model.' }, { status: 400 });
-  if (rawLanguage !== undefined && !VALID_LANGUAGES.has(rawLanguage)) return NextResponse.json({ error: 'Invalid language.' }, { status: 400 });
+  if (rawLanguage !== undefined && (typeof rawLanguage !== 'string' || rawLanguage.length > 48)) return NextResponse.json({ error: 'Invalid language hint.' }, { status: 400 });
 
   const code = rawCode.trim(), langHint = rawLanguage && rawLanguage !== 'auto' ? rawLanguage : 'auto-detect';
   const preferred = rawModel && rawModel !== 'auto' ? rawModel : 'openai/gpt-4o-mini';
@@ -389,19 +391,19 @@ export async function POST(req: NextRequest) {
         v8Issues = prioritizeByChangeSurface(v8Issues, changeSurface);
 
         let bayesResult: Awaited<ReturnType<typeof applyBayesianCalibration>> | null = null;
-        try { const deterministicTitles = new Set<string>(((pr as Record<string, unknown>).hardcodedFindings as Array<{ title: string }> ?? []).map((f: { title: string }) => f.title)); const suppressedTitles = new Set<string>(Array.from((trustResult.stats as Record<string, unknown>)?.suppressedTitles as string[] ?? [])); bayesResult = applyBayesianCalibration(v8Issues as Parameters<typeof applyBayesianCalibration>[0], code, deterministicTitles, suppressedTitles); v8Issues = bayesResult.issues as typeof v8Issues; } catch(e) {}
+        try { const deterministicTitles = new Set<string>(((pr as unknown as Record<string, unknown>).hardcodedFindings as Array<{ title: string }> ?? []).map((f: { title: string }) => f.title)); const suppressedTitles = new Set<string>(Array.from((trustResult.stats as unknown as Record<string, unknown>)?.suppressedTitles as string[] ?? [])); bayesResult = applyBayesianCalibration(v8Issues as unknown as Parameters<typeof applyBayesianCalibration>[0], code, deterministicTitles, suppressedTitles); v8Issues = bayesResult.issues as unknown as typeof v8Issues; } catch(e) {}
 
         let fw2Result: ReturnType<typeof applyHallucinationFirewallV2> | null = null;
         try { fw2Result = applyHallucinationFirewallV2(v8Issues, code); v8Issues = fw2Result.issues; } catch(e) {}
 
         const fixableIssues = v8Issues.filter(i => i.fix !== null);
         const remediationReport = optimizedCode ? verifyRemediation(code, optimizedCode, fixableIssues) : null;
-        if (remediationReport) { for (const r of remediationReport.results) { const match = v8Issues.find(i => i.title === r.issueTitle && Math.abs((i.line ?? 0) - (r.issueLine ?? -1)) <= 2); if (match) { (match as Record<string, unknown>).remediationStatus = r.status; (match as Record<string, unknown>).remediationConfidence = r.confidence; if (r.status === 'BYPASSED') { match.fix = null; match.fixRejectionReason = `[BYPASS DETECTED] ${r.evidence}`; } } } }
+        if (remediationReport) { for (const r of remediationReport.results) { const match = v8Issues.find(i => i.title === r.issueTitle && Math.abs((i.line ?? 0) - (r.issueLine ?? -1)) <= 2); if (match) { (match as unknown as Record<string, unknown>).remediationStatus = r.status; (match as unknown as Record<string, unknown>).remediationConfidence = r.confidence; if (r.status === 'BYPASSED') { match.fix = null; match.fixRejectionReason = `[BYPASS DETECTED] ${r.evidence}`; } } } }
 
         const finalRcIssues = v8Issues;
         const riskResult = applyRiskModel(finalRcIssues, code); const riskModelledIssues = riskResult.issues as typeof finalRcIssues;
         const repoFingerprint = computeRepoFingerprint(code); const repoMemory = getRepoMemory(repoFingerprint);
-        const memoryResult: MemoryApplicationResult = applySecurityMemory(riskModelledIssues as Parameters<typeof applySecurityMemory>[0], repoMemory);
+        const memoryResult: MemoryApplicationResult = applySecurityMemory(riskModelledIssues as unknown as Parameters<typeof applySecurityMemory>[0], repoMemory);
         const memoryActiveIssues = memoryResult.issues as typeof finalRcIssues; const postV11Issues = memoryActiveIssues;
 
         const [rtvResult, wsgResult] = await runParallel2(
@@ -412,13 +414,13 @@ export async function POST(req: NextRequest) {
         type RtvDefault = { report: RuntimeVerificationReport; issues: Issue[]; summary: string };
         type WsgDefault = { graph: ReturnType<typeof buildWholeSystemGraph>; issues: Issue[]; summary: WholeSystemSummary };
         const rtvDefault: RtvDefault = { report: { stats: { total: 0, verified: 0, blocked: 0, partial: 0, unreachable: 0, skipped: 0, upgraded: 0, downgraded: 0 }, results: [] } as unknown as RuntimeVerificationReport, issues: [], summary: 'skipped' };
-        const wsgDefault: WsgDefault = { graph: null as unknown as ReturnType<typeof buildWholeSystemGraph>, issues: [], summary: { crossModuleFindings: 0, totalNodes: 0, authGapCount: 0, dataFlowPaths: 0 } as WholeSystemSummary };
+        const wsgDefault: WsgDefault = { graph: null as unknown as ReturnType<typeof buildWholeSystemGraph>, issues: [], summary: { crossModuleFindings: 0, totalNodes: 0, authGapCount: 0, dataFlowPaths: 0 } as unknown as WholeSystemSummary };
 
         const { report: runtimeVerifReport, issues: runtimeVerifIssues } = unwrapOrDefault(rtvResult, rtvDefault as typeof rtvDefault);
         const { issues: wholeSysIssues, summary: wholeSysSummary } = unwrapOrDefault(wsgResult, wsgDefault as typeof wsgDefault);
         const combinedV13Issues = [...runtimeVerifIssues, ...wholeSysIssues];
 
-        const proofReport = runProofObligationEngine(combinedV13Issues, code); const provedIssues = proofObligationToIssues(proofReport); const proofSummary = getProofObligationSummary(proofReport);
+        const proofReport = runProofObligationEngine(asUtilIssues(combinedV13Issues), code); const provedIssues = proofObligationToIssues(proofReport); const proofSummary = getProofObligationSummary(proofReport);
         const knowledgeReport = applySecurityKnowledgeGraph(provedIssues, code); const enrichedIssues = knowledgeGraphToIssues(knowledgeReport); const postV13Issues = enrichedIssues;
 
         emit({ type: 'stage', stage: 'audit', label: '⚖️ Stage 24 — Deterministic dominance: AI proposes, deterministic decides...' });
@@ -440,19 +442,20 @@ export async function POST(req: NextRequest) {
         const memRefinedStats = getRefinedMemoryStats();
 
         const policyResult = applyPolicyLayer(teamSuppressionFiltered);
-        let ciGate = evaluateCIGate(policyResult.auditLog);
+        const policyGate = evaluateCIGate(policyResult.auditLog);
+        let ciGate = { pass: policyGate.pass, ciBlockReason: policyGate.reason };
 
         // ── STRICT CI GATE OVERRIDE (v1.4.3) ──────────────────────────────────────
         // A production CI gate MUST fail if there are ANY High/Critical bugs.
         const highCriticalBugs = teamSuppressionFiltered.filter(i => 
-          i.type === 'bug' && (i.severity === 'high' || i.severity === 'critical')
+          i.type === 'bug' && i.severity === 'high'
         );
         if (highCriticalBugs.length > 0) {
           ciGate = { pass: false, ciBlockReason: `${highCriticalBugs.length} High/Critical vulnerability(ies) found. Merge blocked.` };
         }
 
         let benchReport: { precision: number; recall: number; f1: number; fpRate: number; regressions: number } | undefined;
-        try { const benchResults = runBenchmark(TEST_VECTORS, (vecCode) => { try { return runSecurityRules(vecCode); } catch { return []; } }); const benchStats = calculateStats(benchResults); const prevRunId = getLatestRunId(); const regReport = detectRegressions(`run-${Date.now()}`, benchResults, prevRunId); benchReport = { precision: Math.round(benchStats.precision * 100) / 100, recall: Math.round(benchStats.recall * 100) / 100, f1: Math.round(benchStats.f1 * 100) / 100, fpRate: Math.round(benchStats.fpRate * 100) / 100, regressions: regReport.regressions.length }; } catch(e) {}
+        try { const benchResults = runBenchmark(TEST_VECTORS, (vecCode) => { try { return runSecurityRules(vecCode).map(f => ({ type: 'bug' as const, severity: f.severity, confidence: 0.9, category: f.category, line: f.line, title: f.title, explanation: f.explanation, fix: f.fix })); } catch { return []; } }); const benchStats = calculateStats(benchResults); const prevRunId = getLatestRunId(); const regReport = detectRegressions(`run-${Date.now()}`, benchResults, prevRunId); benchReport = { precision: Math.round(benchStats.precision * 100) / 100, recall: Math.round(benchStats.recall * 100) / 100, f1: Math.round(benchStats.f1 * 100) / 100, fpRate: Math.round(benchStats.fpRate * 100) / 100, regressions: regReport.regressions.length }; } catch(e) {}
 
         // ── FINAL AGGRESSIVE DEDUPLICATION (v1.4.3) ───────────────────────────────
         // Merges findings that share the same line number and vulnerability family
@@ -474,10 +477,13 @@ export async function POST(req: NextRequest) {
             if (issue.fix && !existing.fix) existing.fix = issue.fix;
           }
         }
-        const finalV14Issues = Array.from(dedupMap.values());
+        const deduplicatedIssues = Array.from(dedupMap.values());
+        const deterministicTitles = new Set(originalDeterministicIssues.map(issue => issue.title.toLowerCase().trim()));
+        const evidenceGate = gateFindings(deduplicatedIssues, code, deterministicTitles);
+        const finalV14Issues = evidenceGate.issues;
 
         const bc = finalV14Issues.filter(i => i.type==='bug').length; const rc = finalV14Issues.filter(i => i.type==='risk').length;
-        const finalWeightedScore = computeWeightedScore(finalV14Issues, families, code, decayStats); score = finalWeightedScore.score;
+        const finalWeightedScore = computeWeightedScore(asUtilIssues(finalV14Issues), families, code, decayStats); score = finalWeightedScore.score;
 
         const obsReport = obs.report(); obs.logSummary(); recordScanToProcessStats(obsReport); const cacheStats = getCacheStats();
 
@@ -507,6 +513,7 @@ export async function POST(req: NextRequest) {
             memoryRefinement: { activeVulns: memRefinedStats.activeVulns, resolvedVulns: memRefinedStats.resolvedVulns, teamSuppressions: memRefinedStats.teamSuppressions, escalatingDrifts: memRefinedStats.escalatingDrifts, volatileDrifts: memRefinedStats.volatileDrifts },
             benchmarkStats: benchReport, languageProfile: { detected: detectedLang, hint: langHint, criticalSinksFound: langProfile.criticalSinks.filter(p => p.test(code)).length, routingOverride: langRoutingOverride, supplement: langSupplement.length > 0 },
             smartContext: contextResult.truncated ? { totalLines: contextResult.totalLines, keptLines: contextResult.keptLines, truncated: contextResult.truncated, securityDensity: contextResult.securityDensity, hotspotCount: contextResult.hotspots.length } : undefined,
+            evidenceGate: evidenceGate.stats,
           },
         };
         emit({ type: 'done', result });

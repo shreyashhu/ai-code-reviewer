@@ -2,7 +2,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Sparkles, Code2, AlertCircle, X, CheckCircle2, Loader2,
-  Search, Bug, Shield, Wrench, Upload, Terminal, FileDown, FileJson, History
+  Search, Bug, Shield, Wrench, Upload, Terminal, FileDown, FileJson, History, Moon, Sun
 } from 'lucide-react';
 import { CodeEditor } from '@/components/editor/CodeEditor';
 import { AnalysisPanel } from '@/components/analysis/AnalysisPanel';
@@ -36,7 +36,11 @@ const EXT_TO_LANG: Record<string, string> = {
   js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
   py: 'python', rs: 'rust', go: 'go', java: 'java', cpp: 'cpp', cc: 'cpp',
   cs: 'csharp', php: 'php', rb: 'ruby', swift: 'swift', kt: 'kotlin',
-  sql: 'sql', sh: 'bash', bash: 'bash',
+  sql: 'sql', sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash', ps1: 'bash',
+  h: 'cpp', hpp: 'cpp', c: 'cpp', m: 'cpp', mm: 'cpp', vue: 'javascript',
+  svelte: 'javascript', html: 'javascript', css: 'javascript', json: 'javascript',
+  yaml: 'other', yml: 'other', toml: 'other', xml: 'other', md: 'other',
+  dart: 'other', scala: 'other', r: 'other', lua: 'other', ex: 'other', exs: 'other',
 };
 
 const DEFAULT_CODE = `// Paste your code here for AI review
@@ -63,7 +67,7 @@ const PIPELINE_STAGES = [
   { icon: CheckCircle2, label: 'Deterministic dominance + FP minimizer + delta',     key: 'audit'    },
 ];
 
-const HACKER_COMMANDS = [
+const Retro_COMMANDS = [
   { delay: 0, output: '[*] Initializing 31-stage security pipeline...' },
   { delay: 400, output: '[+] Loading security rules engine (60+ patterns)...' },
   { delay: 800, output: '[*] Scanning for hardcoded secrets and weak crypto...' },
@@ -147,9 +151,10 @@ export default function HomePage() {
   
   const [userApiKey, setUserApiKey]   = useState('');
   const [showApiSettings, setShowApiSettings] = useState(false);
-  const [isHackerMode, setIsHackerMode] = useState(false);
-  const [hackerLogs, setHackerLogs] = useState<string[]>([]);
-  const hackerLogRef = useRef<HTMLDivElement>(null);
+  const [isRetroMode, setIsRetroMode] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [RetroLogs, setRetroLogs] = useState<string[]>([]);
+  const RetroLogRef = useRef<HTMLDivElement>(null);
   
   const [scanHistory, setScanHistory] = useState<SavedScan[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -177,13 +182,20 @@ export default function HomePage() {
         setScanHistory(parsed.filter((s: SavedScan) => s.result && s.code)); 
       } catch (e) { console.error('Failed to parse history', e); }
     }
+    const savedTheme = localStorage.getItem('review_theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
   }, []);
 
   useEffect(() => {
-    if (hackerLogRef.current) {
-      hackerLogRef.current.scrollTop = hackerLogRef.current.scrollHeight;
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('review_theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (RetroLogRef.current) {
+      RetroLogRef.current.scrollTop = RetroLogRef.current.scrollHeight;
     }
-  }, [hackerLogs]);
+  }, [RetroLogs]);
 
   useEffect(() => {
     if (isLoading) {
@@ -218,17 +230,21 @@ export default function HomePage() {
   }, [isDragging]);
 
   const handleFileContent = useCallback((file: File) => {
+    if (file.size > 2_000_000) {
+      setError('That file is over 2 MB. Paste the relevant source or split it into smaller files.');
+      return;
+    }
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     const detected = EXT_TO_LANG[ext];
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      if (text) {
+      if (text && !text.includes('\u0000')) {
         setCode(text);
         if (detected) setLangId(detected);
         setResult(null);
         setError(null);
-      }
+      } else setError('This looks like a binary file. Upload a text-based source or configuration file.');
     };
     reader.readAsText(file);
   }, []);
@@ -264,11 +280,11 @@ export default function HomePage() {
     setError(null);
     setResult(null);
 
-    if (isHackerMode) {
-      setHackerLogs([]);
-      HACKER_COMMANDS.forEach(({ delay, output }) => {
+    if (isRetroMode) {
+      setRetroLogs([]);
+      Retro_COMMANDS.forEach(({ delay, output }) => {
         setTimeout(() => {
-          setHackerLogs(prev => [...prev, `${new Date().toLocaleTimeString()} ${output}`]);
+          setRetroLogs(prev => [...prev, `${new Date().toLocaleTimeString()} ${output}`]);
         }, delay);
       });
     }
@@ -344,11 +360,11 @@ export default function HomePage() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
-      if (isHackerMode) {
-        setHackerLogs(prev => [...prev, `${new Date().toLocaleTimeString()} [✓] Analysis complete. Results ready.`]);
+      if (isRetroMode) {
+        setRetroLogs(prev => [...prev, `${new Date().toLocaleTimeString()} [✓] Analysis complete. Results ready.`]);
       }
     }
-  }, [code, modelId, langId, isLoading, userApiKey, isHackerMode]);
+  }, [code, modelId, langId, isLoading, userApiKey, isRetroMode]);
 
   const handleAnalyze = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -398,32 +414,32 @@ export default function HomePage() {
 
   return (
     <div 
-      className={cn("flex flex-col h-screen overflow-hidden transition-colors duration-500", isHackerMode && "hacker-mode")} 
+      className={cn("app-shell flex flex-col h-screen overflow-hidden transition-colors duration-500", isRetroMode && "Retro-mode")}
       style={{ 
-        background: isHackerMode ? '#000000' : '#09090b',
-        fontFamily: isHackerMode ? "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" : "inherit"
+        background: isRetroMode ? '#000000' : undefined,
+        fontFamily: isRetroMode ? "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" : "inherit"
       }}
     >
-      {isHackerMode && (
+      {isRetroMode && (
         <style dangerouslySetInnerHTML={{ __html: `
-          .hacker-mode {
+          .Retro-mode {
             background-image: 
               linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
               linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
             background-size: 100% 2px, 3px 100%;
           }
-          .hacker-mode * { text-shadow: 0 0 2px rgba(0, 255, 0, 0.4); }
-          .hacker-mode .text-zinc-100, .hacker-mode .text-zinc-300, .hacker-mode .text-white, 
-          .hacker-mode .text-zinc-400, .hacker-mode .text-zinc-500 { color: #33ff33 !important; }
-          .hacker-mode .text-violet-400, .hacker-mode .text-violet-300 { color: #00ff00 !important; }
-          .hacker-mode .bg-violet-600, .hacker-mode .bg-violet-500 { 
+          .Retro-mode * { text-shadow: 0 0 2px rgba(0, 255, 0, 0.4); }
+          .Retro-mode .text-zinc-100, .Retro-mode .text-zinc-300, .Retro-mode .text-white,
+          .Retro-mode .text-zinc-400, .Retro-mode .text-zinc-500 { color: #33ff33 !important; }
+          .Retro-mode .text-violet-400, .Retro-mode .text-violet-300 { color: #00ff00 !important; }
+          .Retro-mode .bg-violet-600, .Retro-mode .bg-violet-500 {
             background-color: #00ff00 !important; 
             color: #000000 !important; 
             text-shadow: none !important; 
           }
-          .hacker-mode .border-white\\/10, .hacker-mode .border-white\\/5 { border-color: rgba(0, 255, 0, 0.2) !important; }
-          .hacker-mode .bg-white\\/5 { background-color: rgba(0, 255, 0, 0.05) !important; }
-          .hacker-mode .bg-black\\/40 { background-color: rgba(0, 20, 0, 0.6) !important; }
+          .Retro-mode .border-white\\/10, .Retro-mode .border-white\\/5 { border-color: rgba(0, 255, 0, 0.2) !important; }
+          .Retro-mode .bg-white\\/5 { background-color: rgba(0, 255, 0, 0.05) !important; }
+          .Retro-mode .bg-black\\/40 { background-color: rgba(0, 20, 0, 0.6) !important; }
           
           @keyframes blink {
             0%, 50% { opacity: 1; }
@@ -439,11 +455,11 @@ export default function HomePage() {
         ref={fileInputRef}
         type="file"
         className="hidden"
-        accept=".js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.cpp,.cc,.cs,.php,.rb,.swift,.kt,.sql,.sh,.bash,.txt"
+        accept="text/*,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.cpp,.cc,.c,.h,.hpp,.cs,.php,.rb,.swift,.kt,.sql,.sh,.bash,.zsh,.ps1,.json,.yaml,.yml,.toml,.xml,.html,.css,.vue,.svelte,.md"
         onChange={handleFileInputChange}
       />
       
-      {!isHackerMode && (
+      {!isRetroMode && (
         <>
           <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 80% 40% at 50% -10%, rgba(124,58,237,0.10) 0%, transparent 70%)' }} />
           <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(ellipse 40% 30% at 80% 80%, rgba(37,99,235,0.05) 0%, transparent 60%)' }} />
@@ -452,13 +468,13 @@ export default function HomePage() {
 
       <nav
         className="relative z-20 flex-shrink-0 flex items-center justify-between px-5 py-2.5"
-        style={{ background: isHackerMode ? 'rgba(0,0,0,0.9)' : 'rgba(9,9,11,0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 1px 0 rgba(255,255,255,0.04)' }}
+        style={{ background: isRetroMode ? 'rgba(0,0,0,0.9)' : undefined, borderBottom: '1px solid var(--shell-border)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 1px 0 var(--shell-highlight)' }}
       >
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center" style={{ boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
             <Code2 className="w-4 h-4 text-white" />
           </div>
-          <span className="text-sm font-semibold text-zinc-100 tracking-tight">AI Code Review <span className="text-[10px] text-violet-400 font-mono">v1.4.2</span></span>
+          <span className="text-sm font-semibold text-zinc-100 tracking-tight">Code Lens <span className="text-[10px] text-violet-400 font-mono">v2.0</span></span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -509,6 +525,14 @@ export default function HomePage() {
           </div>
 
           <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
+          <button
             onClick={() => setShowHistoryModal(true)}
             className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             title="Scan History"
@@ -517,14 +541,14 @@ export default function HomePage() {
           </button>
 
           <button
-            onClick={() => setIsHackerMode(!isHackerMode)}
+            onClick={() => setIsRetroMode(!isRetroMode)}
             className={cn(
               "p-1.5 rounded-lg border transition-all duration-300",
-              isHackerMode
+              isRetroMode
                 ? "bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.4)]"
                 : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
             )}
-            title={isHackerMode ? "Disable Hacker Mode" : "Enable Hacker Mode"}
+            title={isRetroMode ? "Disable Retro Mode" : "Enable Retro Mode"}
           >
             <Terminal className="w-4 h-4" />
           </button>
@@ -559,9 +583,9 @@ export default function HomePage() {
         </div>
       )}
 
-      {!isHackerMode && <PipelineStatus isLoading={isLoading} msgIdx={loadingMsgIdx} />}
+      {!isRetroMode && <PipelineStatus isLoading={isLoading} msgIdx={loadingMsgIdx} />}
 
-      {isHackerMode && isLoading && (
+      {isRetroMode && isLoading && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col" style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" }}>
           <div className="flex items-center justify-between px-4 py-2 bg-black border-b border-green-500/30">
             <div className="flex items-center gap-2">
@@ -573,7 +597,7 @@ export default function HomePage() {
               <span className="text-xs text-green-400 ml-2">root@ai-reviewer:~/security-audit</span>
             </div>
             <button
-              onClick={() => setIsHackerMode(false)}
+              onClick={() => setIsRetroMode(false)}
               className="text-green-400 hover:text-green-300 text-xs"
             >
               [ESC] Exit Terminal
@@ -581,7 +605,7 @@ export default function HomePage() {
           </div>
 
           <div 
-            ref={hackerLogRef}
+            ref={RetroLogRef}
             className="flex-1 overflow-y-auto p-4 text-xs leading-relaxed"
             style={{ 
               color: '#33ff33',
@@ -591,12 +615,12 @@ export default function HomePage() {
             }}
           >
             <div className="mb-2 text-green-600">
-              AI Code Review Security Pipeline v1.4.2<br/>
-              31-Stage Deterministic + AI Analysis Engine<br/>
+              Code Lens v2.0 Evidence-First Review<br/>
+              Source-anchored deterministic + AI analysis<br/>
               ──────────────────────────────────────────────────────────────────────
             </div>
             
-            {hackerLogs.map((log, idx) => (
+            {RetroLogs.map((log, idx) => (
               <div key={idx} className="mb-1 fade-in-up">
                 <span className="text-green-600">$ </span>
                 {log}

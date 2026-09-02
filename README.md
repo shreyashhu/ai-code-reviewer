@@ -1,34 +1,30 @@
-# AI Code Review — v1.4.2
+# Code Lens — v2.0.0
 
-A production-grade security code analyzer built on Next.js. Paste or upload code and get a scored, multi-stage security audit powered by a 31-stage deterministic + AI pipeline.
+A source-anchored AI code reviewer built on Next.js. Paste or upload text-based code or configuration, then get a scored review where retained findings point back to the submitted source.
 
 **Live demo:** [Try it live on Vercel](https://ai-code-reviewer-kappa-navy.vercel.app/)  
 **Desktop App:** [Download for Windows (.exe)](../../releases/latest) — Native desktop experience, no browser or Node.js required.
 
 ## What it does
 
-It finds real vulnerabilities in code — SQL injection, XSS, SSRF, command injection, path traversal, prototype pollution, open redirects, hardcoded secrets, missing auth, IDOR, race conditions, and more — and gives you:
+It reviews security, logic, maintainability, and performance issues—including SQL injection, XSS, SSRF, command injection, path traversal, secrets, authorization gaps, IDOR, and race conditions—and gives you:
 
-- A **0–100 security score** computed after all 31 pipeline stages
-- **Exploit chains** — step-by-step attacker payloads, not just "this might be a problem"
-- **Verified fixes** — proposed patches are attack-tested before being shown
-- **CI gate** — `auditPassed: true/false` you can wire into your pipeline
-- **Diff view** — side-by-side original vs patched code
-- **Enterprise PDF Exports** — multi-page security dossiers for CISOs and compliance teams
-- **Hacker Mode** — a full-screen Matrix-style terminal UI that streams live pipeline logs
-- **Local Scan History** — tracks your security posture improvements over time
+- A **0–100 score** computed from the final, de-duplicated findings
+- **Evidence gate** — model-only claims without enough source support are removed before display
+- **Source evidence cards** — retained findings identify the line and show a nearby source excerpt
+- **Verified fixes and diff view** — only offered when a candidate patch passes its safeguards
+- **CI status and exportable JSON/PDF reports**
+- **Any text-based source or configuration** — known languages get specialised analysis; unfamiliar syntax falls back to generic review instead of being rejected
+- **Local scan history**, plus a **Retro Mode** terminal view
+- A persistent **dark/light theme** designed around glassy iOS-style surfaces and crisp Nothing-inspired controls
 
-## What's New in v1.4.2
+## What's New in v2.0.0
 
--  **Retro Mode (Terminal UI):** Full-screen Matrix-style CRT terminal interface streaming live pipeline logs and taint propagation.
--  **Enterprise PDF & JSON Exports:** Multi-page, professionally formatted security dossiers for CISOs and compliance teams.
--  **Local Scan History:** Automatically saves your last 15 scans locally to track security posture improvements.
--  **Deterministic Dominance (Resurrection Protocol):** If deterministic regex mathematically proves a vulnerability, AI and heuristic firewalls are blocked from vetoing it. Zero missed criticals.
--  **Strict CI/CD Gating:** Hardcoded failsafe blocks merges if *any* High/Critical vulnerabilities are detected, overriding AI hallucinations.
--  **Taint Path Hallucination Guard:** Constrain LLMs to only report proven, unbroken taint chains, eliminating false positive data flows.
--  **Call Graph Expansion:** Recognizes Express, Flask, Django, and FastAPI route handlers as actual Call Graph nodes.
--  **Aggressive Deduplication & FP Fixes:** Merges duplicate findings and tightens regexes to eliminate false positives.
--  **Bring Your Own Key (BYOK):** Securely paste your OpenRouter API key into the UI settings, decoupling the app from server-side env vars.
+- **Evidence-first findings:** a final quality gate requires a valid source location and supporting code signal for bugs and risks. Findings are labelled *Source verified* or *Source anchored* so confidence is visible rather than implied.
+- **Broader input support:** text-based files, source extensions, and configuration formats are accepted. Files over 2 MB and binary uploads receive an actionable error.
+- **Dark and light themes:** the selected theme is saved locally and applies to the editor, panels, controls, and results view.
+- **Sharper product UI:** Code Lens v2.0 pairs a glassy, native-feeling layout with precise compact controls and improved readability.
+- **Honest review language:** clean results never guarantee safety; manual review remains appropriate for production decisions.
 
 ---
 
@@ -45,7 +41,7 @@ Unlike basic LLM wrappers that just send code to an API and hope for the best, t
 
 **Small code always gets AI eyes.** Files ≤ 80 lines are forced to `single-reviewer` minimum regardless of deterministic signal — short code frequently has high-severity issues that regex engines can't find.
 
-### The 31 Stages
+### Analysis stages
 
 ```text
 Deterministic pass (stages 1–3)
@@ -86,6 +82,11 @@ Post-processing (stages 6–31)
   ├── Memory refinement           — team suppressions, confidence drift
   ├── Policy layer                — OWASP/PCI-DSS/SOC2 compliance packs
   └── Benchmark harness           — precision/recall on every scan
+
+Final evidence gate
+  ├── Confirms a source location and supporting signal for each retained claim
+  ├── Caps confidence according to the available evidence
+  └── Suppresses unsupported model-only bugs and risks
 ```
 
 *Highly Optimized Edge Execution — Thanks to the deterministic Smart Context engine, the AI only analyzes security-dense code. This allows the tool to process massive, 2,000+ line files directly on Vercel's free tier without hitting serverless timeout limits.*
@@ -102,7 +103,7 @@ Post-processing (stages 6–31)
 
 ### Option 2: Windows Desktop App (Easiest) 🖥️
 1. Go to the [Releases Page](../../releases/latest).
-2. Download the `AI-Code-Reviewer-Setup-1.4.2.exe` file.
+2. Download the latest `AI-Code-Reviewer-Setup-2.0.0.exe` file.
 3. Run the installer, open the app, add your API key in the settings, and launch!
 
 ### Option 3: Run Locally (For Developers) 💻
@@ -132,22 +133,17 @@ Open [http://localhost:3000](http://localhost:3000), click the **⚙️ Gear Ico
 
 | Score | Meaning |
 | --- | --- |
-| **95–100** | No issues found after full pipeline. Genuinely clean or very low risk. |
-| **80–94** | Minor risks or low-severity findings. Safe for most contexts. |
+| **95–100** | No retained issues. This is not a guarantee that the code is safe. |
+| **80–94** | Minor risks or low-severity findings. Review relevant changes before production. |
 | **60–79** | Medium-severity issues present. Review before production. |
 | **40–59** | High-severity issues found. Fix before shipping. |
 | **0–39** | Critical vulnerabilities. **CI/CD Gate will block deployment.** |
 
-### 🔍 Deep Dive: The "100/100" Paradox
-If your code scores **100/100** and shows **0 Bugs / 0 Risks** at the top, the analysis isn't over. Scroll down to the bottom of the **Overview** tab to see the hidden depths of the 31-stage pipeline.
+### How to read a finding
 
-A perfect score often means the engine successfully neutralized complex threats, rewarded secure patterns, or safely escalated ambiguous code. Here is how to read the advanced telemetry:
-* **Engine Stats:** See exactly how many **Taint sources** and **Call graph nodes** were mapped across your codebase.
-* **Confidence Decay Engine:** Check how many findings were actively suppressed to prevent False Positives (e.g., `⊘ 9 suppressed | 📉 24% FP reduction`).
-* **Vuln Family Clustering:** See if the engine grouped raw findings into unique families (e.g., `Cross-Site Scripting (XSS) ×19`) to identify systemic architectural patterns.
-* **Root-Cause Graph:** Discover how many unique exploit surfaces were analyzed before being marked as safe or earning **Security Rewards** (e.g., `✓ safe-dom`).
-* **Multi-role Consensus:** Understand the AI's confidence. If you see `⚠ escalated`, it means the AI agents flagged suspicious patterns (like obfuscated code or complex logic) but deferred to human review rather than hallucinating a bug.
-* **Constraint-Valid Attack Chains:** The most critical metric. The engine maps theoretical multi-step exploits (e.g., `🔗 1 fully proven | CVSS 8.2`) to show you what *could* happen if a single guardrail failed, even if the current code is technically safe.
+- **Source verified** means it matched a deterministic result or strong source signal.
+- **Source anchored** means the model claim has a valid location and support in the submitted source, but the surrounding context should still be reviewed.
+- A **clean score** means no findings met the reporting threshold. It does not prove absence of vulnerabilities.
 
 ---
 
@@ -156,8 +152,8 @@ A perfect score often means the engine successfully neutralized complex threats,
 ```text
 ai-code-review/
 ├── app/
-│   ├── api/review/route.ts     # Main 31-stage analysis pipeline & BYOK routing
-│   ├── page.tsx                # Editor + UI + Hacker Mode + History + BYOK Settings
+│   ├── api/review/route.ts     # Analysis pipeline, evidence gate, and BYOK routing
+│   ├── page.tsx                # Editor, themes, Retro Mode, history, and BYOK settings
 │   ├── layout.tsx
 │   └── manifest.ts             # PWA manifest for mobile/desktop wrapping
 ├── components/
@@ -165,6 +161,7 @@ ai-code-review/
 │       └── AnalysisPanel.tsx   # Results panel (Overview/Bugs/Risks/Suggest/Diff/Visual)
 ├── lib/
 │   ├── export-report.ts        # Enterprise PDF & JSON dossier generation
+│   ├── evidence-gate.ts        # Final source-support quality gate
 │   ├── deterministic-dominance.ts # Resurrection Protocol (AI veto override)
 │   ├── adaptive-router.ts      # Tier routing + token budget
 │   ├── taint-engine.ts         # Source→sink taint analysis

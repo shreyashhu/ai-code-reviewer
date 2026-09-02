@@ -12,6 +12,26 @@
   --border: rgba(255, 255, 255, 0.08);
   --accent-from: #7c3aed;
   --accent-to: #2563eb;
+  --shell-bg: #09090b;
+  --shell-surface: rgba(9, 9, 11, 0.82);
+  --shell-border: rgba(255, 255, 255, 0.08);
+  --shell-highlight: rgba(255, 255, 255, 0.04);
+  --editor-bg: #0d0d10;
+  --editor-text: #e4e4e7;
+  --line-number: #3f3f46;
+}
+
+[data-theme='light'] {
+  --bg: #f4f5f8;
+  --shell-bg: #f4f5f8;
+  --shell-surface: rgba(255, 255, 255, 0.82);
+  --shell-border: rgba(15, 23, 42, 0.10);
+  --shell-highlight: rgba(255, 255, 255, 0.92);
+  --panel: rgba(255, 255, 255, 0.72);
+  --border: rgba(15, 23, 42, 0.10);
+  --editor-bg: #fbfbfc;
+  --editor-text: #17171c;
+  --line-number: #9ca3af;
 }
 
 * { box-sizing: border-box; }
@@ -23,6 +43,42 @@ html, body {
   font-family: var(--font-inter);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at 8% 2%, rgba(124, 58, 237, 0.16), transparent 23rem),
+    radial-gradient(circle at 92% 85%, rgba(37, 99, 235, 0.12), transparent 28rem),
+    var(--shell-bg);
+  color: var(--editor-text);
+}
+
+.app-shell nav {
+  background: var(--shell-surface) !important;
+}
+
+/* The light palette keeps the same information hierarchy without forcing the
+   component tree to duplicate every Tailwind color utility. */
+[data-theme='light'] .app-shell .text-white,
+[data-theme='light'] .app-shell .text-zinc-100,
+[data-theme='light'] .app-shell .text-zinc-200 { color: #18181b !important; }
+[data-theme='light'] .app-shell .text-zinc-300 { color: #3f3f46 !important; }
+[data-theme='light'] .app-shell .text-zinc-400 { color: #52525b !important; }
+[data-theme='light'] .app-shell .text-zinc-500 { color: #71717a !important; }
+[data-theme='light'] .app-shell .text-zinc-600,
+[data-theme='light'] .app-shell .text-zinc-700 { color: #8a8a93 !important; }
+[data-theme='light'] .app-shell .bg-zinc-900 { background-color: #fff !important; }
+[data-theme='light'] .app-shell .bg-black\/40 { background-color: rgba(24, 24, 27, 0.035) !important; }
+[data-theme='light'] .app-shell .bg-black\/60 { background-color: rgba(24, 24, 27, 0.30) !important; }
+[data-theme='light'] .app-shell .bg-white\/5 { background-color: rgba(24, 24, 27, 0.045) !important; }
+[data-theme='light'] .app-shell .border-white\/5,
+[data-theme='light'] .app-shell .border-white\/10 { border-color: rgba(24, 24, 27, 0.10) !important; }
+[data-theme='light'] .app-shell select { background-color: rgba(255,255,255,.76) !important; color: #3f3f46 !important; }
+
+.app-shell button, .app-shell select, .app-shell input { -webkit-tap-highlight-color: transparent; }
+.app-shell button:focus-visible, .app-shell select:focus-visible, .app-shell input:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, .55);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -143,7 +199,7 @@ html, body {
 
 /* ── Code Editor textarea ─────────────────────────────────────────────── */
 textarea[data-gramm] {
-  caret-color: #a78bfa;
+  caret-color: var(--accent-from);
 }
 
 textarea[data-gramm]::placeholder {

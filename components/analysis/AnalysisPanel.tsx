@@ -550,6 +550,19 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
             </span>
             <CategoryTag category={issue.category} />
             {issue.line !== null && <span className="text-[10px] text-zinc-600 font-mono">L{issue.line}</span>}
+            {issue.evidence && (
+              <span
+                title={issue.evidence.status === 'verified' ? 'Matched against the submitted source or a deterministic rule.' : 'Has a source anchor; verify the surrounding context before acting.'}
+                className={cn(
+                  'text-[9px] font-semibold px-1.5 py-0.5 rounded-md border',
+                  issue.evidence.status === 'verified'
+                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    : 'text-sky-400 bg-sky-500/10 border-sky-500/20'
+                )}
+              >
+                {issue.evidence.status === 'verified' ? 'SOURCE VERIFIED' : 'SOURCE ANCHORED'}
+              </span>
+            )}
             <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
               {/* blast radius dot */}
               {(issue as Issue & { blastRadius?: string }).blastRadius && (
@@ -585,11 +598,18 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
             </div>
           )}
 
+          {issue.evidence?.excerpt && (
+            <div className="rounded-lg p-2.5" style={{ background: 'rgba(15,23,42,0.20)', border: '1px solid rgba(148,163,184,0.16)' }}>
+              <p className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mb-1.5">Source evidence</p>
+              <pre className="text-[10px] leading-relaxed text-zinc-400 font-mono whitespace-pre-wrap overflow-x-auto">{issue.evidence.excerpt}</pre>
+            </div>
+          )}
+
           {/* v4: Consensus + metrics row */}
           {((issue as Issue & { consensusScore?: number; exploitability?: number; reachability?: number; blastRadius?: string }).consensusScore !== undefined) && (
             <div className="flex flex-wrap gap-1.5">
               {['consensusScore','exploitability','reachability'].map(k => {
-                const val = (issue as Record<string,unknown>)[k] as number | undefined;
+                const val = (issue as unknown as Record<string,unknown>)[k] as number | undefined;
                 if (val === undefined) return null;
                 const labels: Record<string,string> = { consensusScore:'Consensus', exploitability:'Exploit', reachability:'Reach' };
                 const color = val >= 80 ? '#ef4444' : val >= 60 ? '#f59e0b' : '#22c55e';

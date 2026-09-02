@@ -22,6 +22,11 @@ export interface Issue {
   fix: string | null;
   /** Populated when a fix was present but rejected as unsafe */
   fixRejectionReason?: string;
+  evidence?: {
+    status: 'verified' | 'supported';
+    excerpt: string;
+    score: number;
+  };
   // v4 fields
   exploitChain?: string;
   exploitVerified?: boolean;
@@ -405,6 +410,7 @@ export function resolveModel(modelId: ModelId, codeLength: number): string {
 
 export const LANGUAGES = [
   { id: 'auto', label: 'Auto Detect', monaco: 'javascript' },
+  { id: 'other', label: 'Any / Plain Text', monaco: 'plaintext' },
   { id: 'javascript', label: 'JavaScript', monaco: 'javascript' },
   { id: 'typescript', label: 'TypeScript', monaco: 'typescript' },
   { id: 'python', label: 'Python', monaco: 'python' },

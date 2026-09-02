@@ -64,7 +64,7 @@ export const CodeEditor = memo(function CodeEditor({
   return (
     <div
       className={cn('flex w-full h-full overflow-hidden', className)}
-      style={{ background: '#0d0d10', fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace' }}
+      style={{ background: 'var(--editor-bg)', fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace' }}
     >
       {/* Line numbers */}
       <div
@@ -73,8 +73,8 @@ export const CodeEditor = memo(function CodeEditor({
         className="overflow-hidden flex-shrink-0 select-none"
         style={{
           width: 48,
-          background: '#0d0d10',
-          borderRight: '1px solid rgba(255,255,255,0.05)',
+          background: 'var(--editor-bg)',
+          borderRight: '1px solid var(--shell-border)',
           paddingTop: 16,
           paddingBottom: 16,
           overflowY: 'hidden',
@@ -94,7 +94,7 @@ export const CodeEditor = memo(function CodeEditor({
                 paddingRight: 12,
                 fontSize: 12,
                 lineHeight: '22px',
-                color: isBug ? '#ef4444' : '#3f3f46',
+                color: isBug ? '#ef4444' : 'var(--line-number)',
                 background: isBug ? 'rgba(239,68,68,0.08)' : 'transparent',
               }}
             >
@@ -121,8 +121,8 @@ export const CodeEditor = memo(function CodeEditor({
         style={{
           fontSize: 13,
           lineHeight: '22px',
-          color: '#e4e4e7',
-          caretColor: '#a78bfa',
+          color: 'var(--editor-text)',
+          caretColor: 'var(--accent-from)',
           paddingTop: 16,
           paddingBottom: 16,
           paddingLeft: 16,
@@ -131,7 +131,7 @@ export const CodeEditor = memo(function CodeEditor({
           letterSpacing: '0.01em',
           tabSize: 2,
           // Prevent any browser interference
-          WebkitTextFillColor: '#e4e4e7',
+          WebkitTextFillColor: 'var(--editor-text)',
         }}
       />
     </div>

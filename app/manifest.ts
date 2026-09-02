@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'AI Code Reviewer',
     short_name: 'CodeReview',
-    description: 'Production-grade 31-stage AI security code analyzer.',
+    description: 'Evidence-first AI code review with source-anchored findings.',
     start_url: '/',
     display: 'standalone',
     background_color: '#0c0d19',
@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
         src: '/icon-512.png',
         sizes: '512x512',
         type: 'image/png',
-        purpose: 'any maskable'
+        purpose: 'maskable'
       },
     ],
   }
