@@ -81,7 +81,7 @@ let _runCounter = 0;
 export class ObservabilitySession {
   readonly runId: string;
 
-  private timings = new Map<string, StageTiming & { _start: number }>();
+  private timings = new Map<string, StageTiming & { _start: number; _cacheable: boolean }>();
   private tokens:  TokenUsage[]    = [];
   private results: StageResult[]   = [];
   private cacheHits   = 0;
@@ -94,7 +94,7 @@ export class ObservabilitySession {
 
   // ── Stage timing ───────────────────────────────────────────────────────────
 
-  startStage(stage: string, cached = false): void {
+  startStage(stage: string, cached = false, cacheable = false): void {
     this.timings.set(stage, {
       stage,
       startMs:    Date.now(),
@@ -102,9 +102,12 @@ export class ObservabilitySession {
       durationMs: 0,
       cached,
       _start:     Date.now(),
+      _cacheable: cacheable,
     });
-    this.cacheTotal++;
-    if (cached) this.cacheHits++;
+    if (cacheable) {
+      this.cacheTotal++;
+      if (cached) this.cacheHits++;
+    }
   }
 
   endStage(stage: string): void {
@@ -112,6 +115,19 @@ export class ObservabilitySession {
     if (!t) return;
     t.endMs = Date.now();
     t.durationMs = t.endMs - t._start;
+  }
+
+  /**
+   * Mark a stage as a cache hit after its cache-aside lookup completes.
+   * Cache status is only known after a stage starts, so recording it here keeps
+   * run telemetry honest without excluding lookup time from the duration.
+   */
+  setStageCached(stage: string, cached: boolean): void {
+    const t = this.timings.get(stage);
+    if (!t || !t._cacheable || t.cached === cached) return;
+    t.cached = cached;
+    if (cached) this.cacheHits++;
+    else this.cacheHits = Math.max(0, this.cacheHits - 1);
   }
 
   // ── Token tracking ────────────────────────────────────────────────────────

@@ -176,6 +176,17 @@ export interface ReviewResult {
       rejected: number;
       verified: number;
     };
+    observability?: {
+      totalDurationMs: number;
+      totalTokens: number;
+      estimatedCostUsd: number;
+      slowestStage: string | null;
+      cacheHitRate: number;
+    };
+    analysisCache?: {
+      hitRate: number;
+      estimatedSavedTokens: number;
+    };
   };
 }
 

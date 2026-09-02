@@ -316,7 +316,7 @@ export function exportToPdf(result: ReviewResult, originalCode?: string) {
     doc.setFontSize(8);
     doc.setTextColor(161, 161, 170);
     doc.text(
-      `AI Code Reviewer v2.0 | 31-Stage Pipeline | Page ${i} of ${pageCount}`,
+      `AI Code Reviewer v2.0.1 | 31-Stage Pipeline | Page ${i} of ${pageCount}`,
       pageWidth / 2,
       pageHeight - 10,
       { align: 'center' }

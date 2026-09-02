@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
 
   const code = rawCode.trim(), langHint = rawLanguage && rawLanguage !== 'auto' ? rawLanguage : 'auto-detect';
   const preferred = rawModel && rawModel !== 'auto' ? rawModel : 'openai/gpt-4o-mini';
-  const client = new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', defaultHeaders: { 'HTTP-Referer': 'https://ai-code-review.dev', 'X-Title': 'AI Code Reviewer v2.0' } });
+  const client = new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', defaultHeaders: { 'HTTP-Referer': 'https://ai-code-review.dev', 'X-Title': 'AI Code Reviewer v2.0.1' } });
   const FALLBACK: ReviewResult = { summary: 'Analysis failed. Please try again.', score: 0, language: 'unknown', issues: [], optimized_code: '', auditPassed: false, auditDetail: 'Parse failure.' };
 
   const detectedLang = detectLanguage(code, langHint) as LanguageId;
@@ -281,17 +281,20 @@ export async function POST(req: NextRequest) {
         emit({ type: 'stage', stage: 'parse', label: '🔍 Stage 1 — Rule engine & taint analysis...' });
         const ck = cacheKey(code, langHint);
 
-        obs.startStage('security-rules');
+        obs.startStage('security-rules', false, true);
         const { value: hardcodedFindings, cached: rulesCached } = withCacheSync('security-rules', ck, () => runSecurityRules(code) as unknown as Record<string, unknown>);
+        obs.setStageCached('security-rules', rulesCached);
         obs.endStage('security-rules');
 
-        obs.startStage('taint-engine', rulesCached);
+        obs.startStage('taint-engine', false, true);
         const { value: taintReport, cached: taintCached } = withCacheSync('taint-engine', ck, () => runTaintAnalysis(code) as unknown as Record<string, unknown>);
+        obs.setStageCached('taint-engine', taintCached);
         obs.endStage('taint-engine');
 
         emit({ type: 'stage', stage: 'parse', label: '🔗 Stage 2 — Call graph, CFG & interprocedural taint...' });
-        obs.startStage('pipeline', taintCached);
+        obs.startStage('pipeline', false, true);
         const { value: pipelineReport, cached: pipelineCached } = withCacheSync('pipeline', ck, () => runPipeline(code) as unknown as Record<string, unknown>);
+        obs.setStageCached('pipeline', pipelineCached);
         obs.endStage('pipeline');
 
         const hr = hardcodedFindings as unknown as ReturnType<typeof runSecurityRules>;
@@ -348,8 +351,9 @@ export async function POST(req: NextRequest) {
         } else {
           const tierLabel = routeDecision.tier === 'adversarial-full' ? '🛡️ Adversarial pipeline (5-role)...' : '🔬 Triple-consensus (3-role)...';
           emit({ type: 'stage', stage: 'bugs', label: `Stage 3 — ${tierLabel}` });
-          obs.startStage('consensus-ai');
+          obs.startStage('consensus-ai', false, true);
           const { value: cachedConsensus, cached: consCached } = await withCache('consensus-result', ck, () => runConsensus(client, preferred, codeForAI, mergedDet as import('@/lib/utils').Issue[], langHint, ruleCtx, taintCtx, routedBudget.perRole) as unknown as Promise<Record<string, unknown>>);
+          obs.setStageCached('consensus-ai', consCached);
           obs.endStage('consensus-ai');
           const consensusResult = cachedConsensus as unknown as Awaited<ReturnType<typeof runConsensus>>;
           if (!consCached) obs.recordTokensFromStrings('consensus-ai', preferred, codeForAI, JSON.stringify(consensusResult));

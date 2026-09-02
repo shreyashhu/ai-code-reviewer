@@ -1,6 +1,6 @@
-# AI Code Reviewer — v2.0.0
+# AI Code Reviewer — v2.0.1
 
-AI Code Reviewer is a source-anchored review app built on Next.js. Paste or upload text-based code or configuration, then get a scored review where retained findings point back to the submitted source.
+AI Code Reviewer is an evidence-first, source-anchored review app built with Next.js. Paste or upload text-based code or configuration and receive a scored review in which retained findings point back to the submitted source.
 
 **Live demo:** [Try it live on Vercel](https://ai-code-reviewer-kappa-navy.vercel.app/)  
 **Desktop App:** [Download for Windows (.exe)](../../releases/latest) — Native desktop experience, no browser or Node.js required.
@@ -12,13 +12,19 @@ It reviews security, logic, maintainability, and performance issues—including 
 - A **0–100 score** computed from the final, de-duplicated findings
 - **Evidence gate** — model-only claims without enough source support are removed before display
 - **Source evidence cards** — retained findings identify the line and show a nearby source excerpt
-- **Verified fixes and diff view** — only offered when a candidate patch passes its safeguards
+- **Verified fixes and Diff view** — a patch is offered only when it passes safeguards; otherwise the UI explains why an automatic fix was withheld
 - **CI status and exportable JSON/PDF reports**
 - **Any text-based source or configuration** — known languages get specialised analysis; unfamiliar syntax falls back to generic review instead of being rejected
 - **Local scan history** to revisit or export prior reviews
 - A persistent **dark/light theme** designed around glassy iOS-style surfaces and crisp Nothing-inspired controls
 
-## What's New in v2.0.0
+## What's New in v2.0.1
+
+- **Clearer remediation states:** the Diff tab now distinguishes a review that has not run from a completed review where a safe, verified automatic patch is unavailable.
+- **Accurate cache telemetry:** cached review stages are measured correctly and fast repeat scans clearly indicate when prior consensus work was reused. Source checks still run for every submission.
+- **Release consistency:** package metadata, API telemetry, PDF reports, documentation, and the Windows installer version now align on `2.0.1`.
+
+## Highlights from v2.0.0
 
 - **Evidence-first findings:** a final quality gate requires a valid source location and supporting code signal for bugs and risks. Findings are labelled *Source verified* or *Source anchored* so confidence is visible rather than implied.
 - **Broader input support:** text-based files, source extensions, and configuration formats are accepted. Files over 2 MB and binary uploads receive an actionable error.
@@ -89,7 +95,7 @@ Final evidence gate
   └── Suppresses unsupported model-only bugs and risks
 ```
 
-*Highly Optimized Edge Execution — Thanks to the deterministic Smart Context engine, the AI only analyzes security-dense code. This allows the tool to process massive, 2,000+ line files directly on Vercel's free tier without hitting serverless timeout limits.*
+> Review output is decision support, not a security guarantee. Always validate findings and remediation in the context of the application before shipping.
 
 ---
 
@@ -103,8 +109,8 @@ Final evidence gate
 
 ### Option 2: Windows Desktop App (Easiest) 🖥️
 1. Go to the [Releases Page](../../releases/latest).
-2. Download the latest `AI-Code-Reviewer-Setup-2.0.0.exe` file.
-3. Run the installer, open the app, add your API key in the settings, and launch!
+2. Download the latest `AI Code Reviewer Setup 2.0.1.exe` installer.
+3. Run the installer, open the app, add your API key in Settings, and start reviewing.
 
 ### Option 3: Run Locally (For Developers) 💻
 
@@ -126,6 +132,16 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000), click the **⚙️ Gear Icon** to add your API key, and click **Review code**.
 
 *(Note: If you prefer using environment variables locally instead of the UI, create a `.env.local` file with `OPENROUTER_API_KEY=sk-or-v1-...`)*
+
+### Build the Windows installer
+
+From PowerShell, run:
+
+```powershell
+npm.cmd run build:win
+```
+
+The installer is written to `dist/`. The desktop wrapper loads the deployed application, so an internet connection is required when using the installed app.
 
 ---
 
@@ -195,7 +211,8 @@ If you want to submit code:
 3. Make your changes
 4. Test locally: `npm run dev`
 5. Build check: `npm run build`
-6. Open a PR
+6. Build the installer when desktop packaging changes: `npm.cmd run build:win`
+7. Open a PR
 
 ## 📄 License
 

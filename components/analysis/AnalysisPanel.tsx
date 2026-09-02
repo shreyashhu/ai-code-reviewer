@@ -98,6 +98,7 @@ export function AnalysisPanel({ result, isLoading, loadingMessage, error, origin
             <DiffTab
               original={originalCode}
               optimized={result?.optimized_code}
+              issues={result?.issues ?? []}
               isLoading={isLoading}
               onApplyFix={onApplyFix}
             />
@@ -212,6 +213,12 @@ function OverviewTab({ result, isLoading, loadingMessage }: { result: ReviewResu
               <MetaBadge icon={<Zap className="w-3 h-3"/>} label="Frameworks" value={result.pipelineMetadata.frameworksDetected.join(', ')} />
             )}
           </div>
+
+          {result.pipelineMetadata.observability?.cacheHitRate && result.pipelineMetadata.observability.cacheHitRate > 0 && (
+            <p className="mt-2 pt-2 border-t border-violet-500/15 text-[9px] text-zinc-500 leading-relaxed">
+              Fast result: {Math.round(result.pipelineMetadata.observability.cacheHitRate * 100)}% of review stages reused a cached result. Source checks still ran for this submission.
+            </p>
+          )}
 
           {/* v7: Confidence Decay Stats */}
           {result.pipelineMetadata.decayStats && result.pipelineMetadata.decayStats.totalInput > 0 && (() => {
@@ -745,10 +752,11 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
 // ─── Diff Tab ─────────────────────────────────────────────────────────────────
 
 function DiffTab({
-  original, optimized, isLoading, onApplyFix,
+  original, optimized, issues, isLoading, onApplyFix,
 }: {
   original: string;
   optimized: string | undefined;
+  issues: Issue[];
   isLoading: boolean;
   onApplyFix?: (code: string) => void;
 }) {
@@ -770,7 +778,15 @@ function DiffTab({
   }, [optimized, onApplyFix]);
 
   if (isLoading) return <SkeletonList count={4} />;
-  if (!optimized) return <EmptyState label="Run analysis to see optimized diff" />;
+  if (!optimized) {
+    if (issues.length === 0) return <EmptyState label="Analysis complete — no changes required" positive />;
+    const withheldCount = issues.filter(issue => !issue.fix && issue.fixRejectionReason).length;
+    return <EmptyState label={
+      withheldCount > 0
+        ? `Analysis complete — safe auto-fixes were withheld for ${withheldCount} finding${withheldCount === 1 ? '' : 's'}`
+        : 'Analysis complete — no verified automatic patch is available'
+    } />;
+  }
 
   const hunks = diffLines(original, optimized);
 
