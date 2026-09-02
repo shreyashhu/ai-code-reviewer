@@ -386,7 +386,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <div className="brand-lockup">
               <span className="brand-name">AI Code Reviewer</span>
-              <sub className="version-chip">v2.0</sub>
+              <sub className="version-chip">v2.0.1</sub>
             </div>
           </div>
         </div>

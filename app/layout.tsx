@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI Code Reviewer v2.0',
+  title: 'AI Code Reviewer v2.0.1',
   description: 'Source-anchored code review with deterministic checks and evidence-gated findings.',
 };
 
