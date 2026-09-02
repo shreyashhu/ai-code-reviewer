@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI Code Review',
-  description: 'Multi-stage AI-powered code analysis: parse → bug detection → exploit verification → fix rectification',
+  title: 'AI Code Reviewer v2.0',
+  description: 'Source-anchored code review with deterministic checks and evidence-gated AI findings.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

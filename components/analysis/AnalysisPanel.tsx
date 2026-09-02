@@ -65,7 +65,7 @@ export function AnalysisPanel({ result, isLoading, loadingMessage, error, origin
         </div>
         <p className="text-sm font-medium text-zinc-400">Ready to analyze</p>
         <p className="text-xs text-zinc-600 text-center max-w-xs">
-          Paste your code and click Analyze (or Ctrl+Enter) for structured AI feedback with exploit detection
+          Paste your code and click Review code (or Ctrl+Enter) for source-anchored feedback
         </p>
       </div>
     );
@@ -126,6 +126,7 @@ function OverviewTab({ result, isLoading, loadingMessage }: { result: ReviewResu
   const risks        = result.issues.filter((i) => i.type === 'risk');
   const suggestions  = result.issues.filter((i) => i.type === 'suggestion');
   const securityBugs = bugs.filter((i) => i.category === 'security');
+  const evidence = result.pipelineMetadata?.evidenceGate;
 
   const scoreColor = result.score >= 80 ? '#22c55e' : result.score >= 60 ? '#facc15' : '#ef4444';
   const scoreLabel = result.score >= 80 ? 'Good'    : result.score >= 60 ? 'Fair'    : 'Needs Work';
@@ -160,6 +161,19 @@ function OverviewTab({ result, isLoading, loadingMessage }: { result: ReviewResu
         </div>
       )}
 
+      {evidence && (
+        <div className="evidence-strip">
+          <div>
+            <p className="eyebrow">Evidence gate</p>
+            <p className="text-xs text-zinc-400 mt-1">Every displayed finding points to the submitted source.</p>
+          </div>
+          <div className="flex items-center gap-3 text-right">
+            <span><b>{evidence.verified}</b> verified</span>
+            <span><b>{evidence.rejected}</b> withheld</span>
+          </div>
+        </div>
+      )}
+
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-2">
         <StatCard label="Security Bugs" value={securityBugs.length}              color="#ef4444" icon={<Shield        className="w-3.5 h-3.5" />} urgent={securityBugs.length > 0} />
@@ -188,7 +202,7 @@ function OverviewTab({ result, isLoading, loadingMessage }: { result: ReviewResu
       {result.pipelineMetadata && (
         <div className="rounded-xl p-3" style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.18)' }}>
           <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Cpu className="w-3 h-3" />Engine v1.4 — 31-Stage Pipeline + Constraint-Valid Attack Chains
+            <Cpu className="w-3 h-3" />Evidence-first review telemetry
           </p>
           <div className="grid grid-cols-2 gap-1.5">
             <MetaBadge icon={<Network className="w-3 h-3"/>} label="Taint sources" value={String(result.pipelineMetadata.taintSources)} />
@@ -510,7 +524,7 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
   const typeConfig: Record<IssueType, { color: string; bg: string; border: string; label: string; icon: React.ReactNode }> = {
     bug:        { color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    label: 'Bug',        icon: <Bug           className="w-3 h-3" /> },
     risk:       { color: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  label: 'Risk',       icon: <AlertTriangle className="w-3 h-3" /> },
-    suggestion: { color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20', label: 'Suggestion', icon: <Lightbulb     className="w-3 h-3" /> },
+    suggestion: { color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   label: 'Suggestion', icon: <Lightbulb     className="w-3 h-3" /> },
   };
 
   const tc            = typeConfig[issue.type];
@@ -521,7 +535,7 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
 
   return (
     <div
-      className="overflow-hidden rounded-xl transition-all duration-200 fade-in-up"
+      className="issue-card overflow-hidden rounded-xl transition-all duration-200 fade-in-up"
       style={{
         animationDelay: animDelay,
         background: expanded

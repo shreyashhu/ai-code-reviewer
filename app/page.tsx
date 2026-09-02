@@ -2,11 +2,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Sparkles, Code2, AlertCircle, X, CheckCircle2, Loader2,
-  Search, Bug, Shield, Wrench, Upload, Terminal, FileDown, FileJson, History, Moon, Sun
+  Search, Bug, Shield, Wrench, Upload, FileDown, FileJson, History
 } from 'lucide-react';
 import { CodeEditor } from '@/components/editor/CodeEditor';
 import { AnalysisPanel } from '@/components/analysis/AnalysisPanel';
 import { Button } from '@/components/ui/Button';
+import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
 import { exportToPdf, exportToJson } from '@/lib/export-report';
 import {
   cn, MODELS, LANGUAGES, LOADING_MESSAGES,
@@ -60,11 +61,11 @@ function processUserData(users) {
 }`;
 
 const PIPELINE_STAGES = [
-  { icon: Search,       label: 'Rule engine & taint analysis (40+ rules)',          key: 'parse'    },
-  { icon: Bug,          label: 'Call graph & multi-role consensus',                  key: 'bugs'     },
-  { icon: Shield,       label: 'Constraint chains + semantic graph + proof engine',  key: 'security' },
-  { icon: Wrench,       label: 'AST patches + verified remediation',                 key: 'fix'      },
-  { icon: CheckCircle2, label: 'Deterministic dominance + FP minimizer + delta',     key: 'audit'    },
+  { icon: Search,       label: 'Inspect source',            key: 'parse'    },
+  { icon: Bug,          label: 'Trace data flows',          key: 'bugs'     },
+  { icon: Shield,       label: 'Verify local evidence',     key: 'security' },
+  { icon: Wrench,       label: 'Validate safe fixes',       key: 'fix'      },
+  { icon: CheckCircle2, label: 'Publish reviewed findings', key: 'audit'    },
 ];
 
 const Retro_COMMANDS = [
@@ -172,7 +173,7 @@ export default function HomePage() {
   const containerRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('openrouter_key');
+    const savedKey = sessionStorage.getItem('openrouter_key');
     if (savedKey) setUserApiKey(savedKey);
 
     const savedHistory = localStorage.getItem('scan_history');
@@ -467,14 +468,19 @@ export default function HomePage() {
       )}
 
       <nav
-        className="relative z-20 flex-shrink-0 flex items-center justify-between px-5 py-2.5"
+        className="topbar relative z-20 flex-shrink-0 flex items-center justify-between px-5 py-2.5"
         style={{ background: isRetroMode ? 'rgba(0,0,0,0.9)' : undefined, borderBottom: '1px solid var(--shell-border)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 1px 0 var(--shell-highlight)' }}
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center" style={{ boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
+          <div className="brand-mark w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
             <Code2 className="w-4 h-4 text-white" />
           </div>
-          <span className="text-sm font-semibold text-zinc-100 tracking-tight">Code Lens <span className="text-[10px] text-violet-400 font-mono">v2.0</span></span>
+          <div className="flex items-center gap-2">
+            <div className="brand-lockup">
+              <span className="brand-name">AI Code Reviewer</span>
+              <sub className="version-chip">v2.0</sub>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -520,17 +526,11 @@ export default function HomePage() {
               }}
             />
             <span className="text-[10px] font-medium" style={{ color: isLoading ? '#facc15' : '#22c55e' }}>
-              {isLoading ? 'Analyzing' : 'AI Ready'}
+              {isLoading ? 'Reviewing' : 'Evidence-ready'}
             </span>
           </div>
 
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+          <ThemeSwitch value={theme} onChange={setTheme} />
 
           <button
             onClick={() => setShowHistoryModal(true)}
@@ -538,19 +538,6 @@ export default function HomePage() {
             title="Scan History"
           >
             <History className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => setIsRetroMode(!isRetroMode)}
-            className={cn(
-              "p-1.5 rounded-lg border transition-all duration-300",
-              isRetroMode
-                ? "bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.4)]"
-                : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
-            )}
-            title={isRetroMode ? "Disable Retro Mode" : "Enable Retro Mode"}
-          >
-            <Terminal className="w-4 h-4" />
           </button>
 
           <button
@@ -568,7 +555,7 @@ export default function HomePage() {
             className="min-w-[110px]"
             title="Ctrl+Enter"
           >
-            {isLoading ? 'Analyzing...' : 'Analyze'}
+            {isLoading ? 'Reviewing...' : 'Review code'}
           </Button>
         </div>
       </nav>
@@ -648,7 +635,7 @@ export default function HomePage() {
         style={{ cursor: isDragging ? 'col-resize' : 'default' }}
       >
         <div
-          className="flex flex-col overflow-hidden flex-shrink-0"
+          className="workbench-pane editor-pane flex flex-col overflow-hidden flex-shrink-0"
           style={{ width: `${splitPct}%`, borderRight: '1px solid rgba(255,255,255,0.06)', minHeight: 0 }}
         >
           <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -670,7 +657,8 @@ export default function HomePage() {
                   </span>
                 </button>
               </div>
-              <span className="text-xs text-zinc-600 font-mono ml-1">{fileName}</span>
+            <span className="pane-label">SOURCE</span>
+            <span className="text-xs text-zinc-600 font-mono">{fileName}</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -738,9 +726,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="flex flex-col overflow-hidden flex-1">
+        <div className="workbench-pane analysis-pane flex flex-col overflow-hidden flex-1">
           <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Analysis</span>
+            <span className="pane-label">REVIEW</span>
             {result && !isLoading && (
               <div className="flex items-center gap-2">
                 <button 
@@ -788,21 +776,12 @@ export default function HomePage() {
             />
           </div>
 
-          <div className="flex-shrink-0 flex items-center justify-center py-2 px-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-            <span className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors">
-              Made by{' '}
-              <a href="https://t.me/AlpraxIsHim" target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-violet-400 transition-colors">
-                @AlpraxIsHim
-              </a>
-              {' '}on TG
-            </span>
-          </div>
         </div>
       </main>
 
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="app-modal fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="modal-card bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">Scan History</h2>
               <button onClick={() => setShowHistoryModal(false)} className="text-zinc-400 hover:text-white">
@@ -880,11 +859,11 @@ export default function HomePage() {
       )}
 
       {showApiSettings && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-md w-full shadow-2xl">
+        <div className="app-modal fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="modal-card bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-md w-full shadow-2xl">
             <h2 className="text-lg font-bold text-white mb-2">OpenRouter API Settings</h2>
             <p className="text-sm text-zinc-400 mb-4">
-              Enter your OpenRouter API key. It is saved securely in your browser's local storage.
+              Enter your OpenRouter API key. It is kept only for this browser session and never stored in the project.
               <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline ml-1">Get a free key here.</a>
             </p>
             <input
@@ -897,7 +876,7 @@ export default function HomePage() {
             <div className="flex gap-3">
               <button 
                 onClick={() => {
-                  localStorage.setItem('openrouter_key', userApiKey);
+                  sessionStorage.setItem('openrouter_key', userApiKey);
                   setShowApiSettings(false);
                 }}
                 className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
@@ -915,7 +894,7 @@ export default function HomePage() {
               <button
                 onClick={() => {
                   setUserApiKey('');
-                  localStorage.removeItem('openrouter_key');
+                  sessionStorage.removeItem('openrouter_key');
                 }}
                 className="w-full mt-3 text-xs text-red-400 hover:text-red-300 transition-colors"
               >

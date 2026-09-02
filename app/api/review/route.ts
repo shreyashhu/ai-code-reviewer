@@ -132,9 +132,10 @@ CRITICAL — SMALL/SIMPLE CODE IS NOT AUTOMATICALLY SAFE: Short or simple-lookin
 WHAT TO FIND: Logic bugs, Auth/authz, Business logic, Type coercion, Async bugs, Hidden eval sinks, Dead validators, Secrets/config, Missing rate limits.
 STRICT DEDUPLICATION: Same root-cause at N lines → ONE finding mentioning all lines.
 TAINT PATH HALLUCINATION GUARD: Do NOT invent taint chains or claim a variable reaches a sink if the code does not explicitly show it. If you cannot trace the exact variable to the sink, do not report it as a taint flow.
+EVIDENCE CONTRACT: Every finding MUST name its exact 1-based line and quote at least two real identifiers or API calls from that line and its immediate context in the explanation. Do not report a finding when that local evidence is unavailable. Never claim a payload was executed; say "source review" unless a deterministic verifier supplied proof.
 CONFIDENCE CALIBRATION (0.0-1.0): 0.90-0.98 (proven), 0.70-0.89 (strong), 0.40-0.69 (risk), <0.40 (skip).
 FALSE POSITIVE GUARD: db.query(sql,[params]) is NOT SQLi. encodeHtml output is NOT XSS.
-Return ONLY raw JSON: { "summary": "...", "score":N, "language": "js", "issues":[{"type": "bug", "severity": "high", "category": "security", "line":N, "title": "...", "explanation": "...", "fix": "...", "exploitChain": "...", "confidence":0.92}]}`;
+Return ONLY raw JSON: { "summary": "...", "score":N, "language": "js", "issues":[{"type": "bug", "severity": "high", "category": "security", "line":N, "title": "...", "explanation": "At line N, realIdentifier reaches realApi ...", "fix": "...", "confidence":0.92}]}`;
 
 function extractJSON(raw: string): Record<string, unknown> | null {
   const t = raw.replace(/^`(?:json)?\s*/m, '').replace(/\s*`\s*$/m, '').trim();
@@ -158,7 +159,9 @@ function normalizeIssues(raw: unknown[]): Issue[] {
     const VALID_CATEGORIES = new Set(['security', 'logic', 'performance', 'maintainability']);
     const rawCat = String(i.category ?? '').toLowerCase();
     const category = VALID_CATEGORIES.has(rawCat) ? rawCat : 'security';
-    return { type, severity, category, line: typeof i.line === 'number' ? i.line : null, title, explanation, fix: typeof i.fix === 'string' && i.fix.trim() ? i.fix.trim() : null, fixRejectionReason: typeof i.fixRejectionReason === 'string' ? i.fixRejectionReason : undefined, exploitVerified: typeof i.exploitVerified === 'boolean' ? i.exploitVerified : undefined, exploitChain: typeof i.exploitChain === 'string' ? i.exploitChain : undefined };
+    const rawConfidence = typeof i.confidence === 'number' ? i.confidence : 0;
+    const confidence = Number.isFinite(rawConfidence) ? Math.min(0.98, Math.max(0, rawConfidence)) : 0;
+    return { type, severity, category, line: Number.isInteger(i.line) && (i.line as number) > 0 ? i.line as number : null, title, explanation, fix: typeof i.fix === 'string' && i.fix.trim() ? i.fix.trim() : null, fixRejectionReason: typeof i.fixRejectionReason === 'string' ? i.fixRejectionReason : undefined, exploitVerified: typeof i.exploitVerified === 'boolean' ? i.exploitVerified : undefined, exploitChain: typeof i.exploitChain === 'string' ? i.exploitChain : undefined, confidence };
   }).filter((i): i is Issue => i !== null);
 }
 
@@ -177,6 +180,24 @@ function semanticDedup(issues: Issue[]): Issue[] {
     }
   }
   return Array.from(canonical.values());
+}
+
+/**
+ * The model is allowed to propose a patch, not silently replace the submitted
+ * program with an unrelated rewrite. This inexpensive guard catches the most
+ * common unsafe responses before remediation verification runs.
+ */
+function isPlausiblePatchedSource(original: string, candidate: string): boolean {
+  const trimmed = candidate.trim();
+  if (!trimmed || /^```/.test(trimmed) || /^(here(?:'s| is)|the (?:fixed|updated) code)/i.test(trimmed)) return false;
+  if (trimmed.length < original.length * 0.45 || trimmed.length > original.length * 1.8) return false;
+
+  const identifiers = original.match(/\b[A-Za-z_$][\w$]{3,}\b/g) ?? [];
+  const stableIdentifiers = [...new Set(identifiers)]
+    .filter(name => !['const', 'function', 'return', 'import', 'export', 'from', 'true', 'false', 'null'].includes(name))
+    .slice(0, 12);
+  const preserved = stableIdentifiers.filter(name => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(trimmed)).length;
+  return stableIdentifiers.length < 3 || preserved >= Math.ceil(stableIdentifiers.length * 0.6);
 }
 
 function buildResult(parsed: Record<string, unknown>, hard: Issue[]): ReviewResult {
@@ -363,7 +384,7 @@ export async function POST(req: NextRequest) {
         if (!optimizedCode) {
           const fixable = finalIssues.filter(i => i.fix !== null);
           if (fixable.length > 0) {
-            try { const fixList = fixable.slice(0,8).map(i => `Line ${i.line??'?'} (${i.title}): ${i.fix}`).join('\n'); obs.startStage('diff-ai'); const diffRaw = await callWithFallback(client, preferred, [{ role: 'system', content: 'Apply ALL listed fixes. Return ONLY the complete corrected source code. No markdown. No explanation.' }, { role: 'user', content: `ORIGINAL:\n${codeForAI}\n\nFIXES:\n${fixList}\n\nReturn corrected source:` }], routedBudget.diff); obs.endStage('diff-ai'); optimizedCode = diffRaw.replace(/^```[\w]*\r?\n?/,'').replace(/\r?\n?```$/,'').trim(); } catch(e) { console.warn('[Diff] non-fatal:', e instanceof Error ? e.message : e); }
+            try { const fixList = fixable.slice(0,8).map(i => `Line ${i.line??'?'} (${i.title}): ${i.fix}`).join('\n'); obs.startStage('diff-ai'); const diffRaw = await callWithFallback(client, preferred, [{ role: 'system', content: 'Apply only the listed, source-anchored fixes. Preserve public APIs, behavior unrelated to the listed fixes, and the source language. Return ONLY the complete corrected source code, with no markdown or explanation.' }, { role: 'user', content: `ORIGINAL:\n${codeForAI}\n\nFIXES:\n${fixList}\n\nReturn corrected source:` }], routedBudget.diff); obs.endStage('diff-ai'); const candidate = diffRaw.replace(/^```[\w]*\r?\n?/,'').replace(/\r?\n?```$/,'').trim(); optimizedCode = isPlausiblePatchedSource(code, candidate) ? candidate : ''; } catch(e) { console.warn('[Diff] non-fatal:', e instanceof Error ? e.message : e); }
           }
         }
 
@@ -398,6 +419,12 @@ export async function POST(req: NextRequest) {
 
         const fixableIssues = v8Issues.filter(i => i.fix !== null);
         const remediationReport = optimizedCode ? verifyRemediation(code, optimizedCode, fixableIssues) : null;
+        // Never offer an automatic patch if verification saw a bypass or a new
+        // regression. The finding remains visible, but the engineer keeps
+        // control of the remediation.
+        if (remediationReport && (remediationReport.bypassed > 0 || remediationReport.results.some(r => r.regression))) {
+          optimizedCode = '';
+        }
         if (remediationReport) { for (const r of remediationReport.results) { const match = v8Issues.find(i => i.title === r.issueTitle && Math.abs((i.line ?? 0) - (r.issueLine ?? -1)) <= 2); if (match) { (match as unknown as Record<string, unknown>).remediationStatus = r.status; (match as unknown as Record<string, unknown>).remediationConfidence = r.confidence; if (r.status === 'BYPASSED') { match.fix = null; match.fixRejectionReason = `[BYPASS DETECTED] ${r.evidence}`; } } } }
 
         const finalRcIssues = v8Issues;

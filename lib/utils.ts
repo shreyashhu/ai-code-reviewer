@@ -170,6 +170,12 @@ export interface ReviewResult {
       highestCvss:        number;
       criticalCount:      number;
     };
+    evidenceGate?: {
+      input: number;
+      retained: number;
+      rejected: number;
+      verified: number;
+    };
   };
 }
 

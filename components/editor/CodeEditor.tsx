@@ -63,7 +63,7 @@ export const CodeEditor = memo(function CodeEditor({
 
   return (
     <div
-      className={cn('flex w-full h-full overflow-hidden', className)}
+      className={cn('code-editor-surface flex w-full h-full overflow-hidden', className)}
       style={{ background: 'var(--editor-bg)', fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace' }}
     >
       {/* Line numbers */}

@@ -22,7 +22,7 @@ export interface EvidenceGateStats {
 }
 
 const SINK_PATTERN = /\b(?:eval|exec|system|shell_exec|Process\.Start|Runtime\.getRuntime|pickle\.loads?|unserialize|deserialize|query|execute|raw|innerHTML|dangerouslySetInnerHTML|redirect|open|readFile|writeFile|child_process|password|secret|token|api[_-]?key)\b/i;
-const STOP_WORDS = new Set(['with', 'from', 'that', 'this', 'into', 'code', 'input', 'data', 'user', 'issue', 'risk', 'security', 'missing', 'unsafe', 'potential', 'possible', 'vulnerability', 'injection', 'validation']);
+const STOP_WORDS = new Set(['with', 'from', 'that', 'this', 'into', 'code', 'input', 'data', 'user', 'issue', 'risk', 'security', 'missing', 'unsafe', 'potential', 'possible', 'vulnerability', 'injection', 'validation', 'using', 'without', 'could', 'allows', 'allow', 'should', 'because', 'function', 'value', 'values', 'request', 'response', 'parameter', 'parameters']);
 
 function excerptFor(lines: string[], line: number | null): { excerpt: string; validLine: boolean; sourceLine: string } {
   if (line === null || line < 1 || line > lines.length) return { excerpt: '', validLine: false, sourceLine: '' };
@@ -35,11 +35,13 @@ function excerptFor(lines: string[], line: number | null): { excerpt: string; va
   };
 }
 
-function hasClaimAnchor(issue: EvidenceIssue, code: string): boolean {
+function localClaimAnchors(issue: EvidenceIssue, lines: string[]): string[] {
+  if (issue.line === null || issue.line < 1 || issue.line > lines.length) return [];
   const terms = `${issue.title} ${issue.explanation}`
     .toLowerCase()
-    .match(/[a-z_][a-z0-9_.-]{4,}/g) ?? [];
-  return terms.some(term => !STOP_WORDS.has(term) && code.toLowerCase().includes(term));
+    .match(/[a-z_][a-z0-9_.-]{3,}/g) ?? [];
+  const localCode = lines.slice(Math.max(0, issue.line - 3), Math.min(lines.length, issue.line + 2)).join('\n').toLowerCase();
+  return [...new Set(terms.filter(term => !STOP_WORDS.has(term) && localCode.includes(term)))];
 }
 
 export function gateFindings<T extends EvidenceIssue>(issues: T[], code: string, deterministicTitles: Set<string>): { issues: T[]; stats: EvidenceGateStats } {
@@ -49,12 +51,21 @@ export function gateFindings<T extends EvidenceIssue>(issues: T[], code: string,
   const retained = issues.flatMap(issue => {
     const deterministic = deterministicTitles.has(issue.title.toLowerCase().trim());
     const { excerpt, validLine, sourceLine } = excerptFor(lines, issue.line);
-    const score = (deterministic ? 4 : 0) + (validLine ? 2 : 0) + (sourceLine && SINK_PATTERN.test(sourceLine) ? 2 : 0) + (hasClaimAnchor(issue, code) ? 1 : 0);
+    const anchors = localClaimAnchors(issue, lines);
+    const hasSink = Boolean(sourceLine && SINK_PATTERN.test(sourceLine));
+    const score = (deterministic ? 4 : 0) + (validLine ? 2 : 0) + (hasSink ? 2 : 0) + Math.min(anchors.length, 2);
 
     // Suggestions are intentionally lower-stakes, but bugs and risks need a
     // concrete source location plus either a known rule, sink, or claim anchor.
-    const threshold = issue.type === 'suggestion' ? 2 : 3;
-    if ((issue.type !== 'suggestion' && !validLine) || score < threshold) {
+    const threshold = issue.type === 'suggestion' ? 3 : 4;
+    const requiresStrongLocalEvidence = !deterministic && issue.type !== 'suggestion';
+    const hasStrongLocalEvidence = hasSink || anchors.length >= 2;
+    const hasTrustedConfidence = (issue.confidence ?? 0) >= 0.7;
+    if (
+      !validLine ||
+      score < threshold ||
+      (requiresStrongLocalEvidence && (!hasStrongLocalEvidence || !hasTrustedConfidence))
+    ) {
       rejected++;
       return [];
     }
